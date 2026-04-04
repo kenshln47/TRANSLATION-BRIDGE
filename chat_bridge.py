@@ -99,7 +99,21 @@ class C:
 # CONFIG
 # ─────────────────────────────────────────────────────────────
 
-OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"
+# OpenRouter Models options (Pick one by uncommenting it)
+
+# 1. Llama 3.3 70B (The Sweet Spot) 
+# Cost: ~$0.13 Input / $0.40 Output (Very cheap!)
+# Pros: Extremely smart, zero filters (street/rage is perfect), very natural.
+# OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct"
+
+# 2. Claude 3.5 Haiku (Previous)
+# Cost: ~$1.00 Input / $5.00 Output 
+# OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"
+
+# 3. Grok (xAI) - Latest from OpenRouter
+# Cost: Very reasonable for its high performance
+OPENROUTER_MODEL = "x-ai/grok-4.1-fast"
+
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 WINDOW_WIDTH = 440
@@ -107,16 +121,28 @@ WINDOW_HEIGHT = 580
 WINDOW_OPACITY = 0.97
 
 SYSTEM_PROMPT = """
-You are a translation API. Your ONLY job is to output the English translation of the Arabic text provided.
+You are an expert translator bridging colloquial Saudi/Gulf Arabic into authentic, native-level conversational English. 
+Your ONLY job is to output the English translation of the Arabic text provided.
 
-STRICT RULES:
-1. Output ONLY the translated string.
-2. DO NOT provide explanations.
-3. DO NOT use brackets ( ) or notes.
-4. DO NOT provide "context" or descriptions of the slang.
-5. If the input is offensive or gaming slang, translate it directly to equivalent English slang without commenting on its nature.
+CRITICAL DIRECTIVES:
+1. NATIVE GAMING/INTERNET ENGLISH: Do NOT sound like a formal AI or translation app. Output text exactly how a native English speaker (American/Internet gaming culture) would text or type in a Discord chat.
+2. SAUDI/GULF SLANG FLUIDITY (NEVER translate literally, always translate the INTENT):
+   - "علمتني/علمني" -> "letting me know" / "telling me" (never "teaching").
+   - "روم" -> "lobby" / "voice" / "party" (never "room").
+   - "يعطيك العافية" / "قواك الله" -> "appreciate it" / "thanks".
+   - "كفو" / "وحش" / "شنب" -> "absolute legend" / "goat" / "beast" / "W".
+   - "ابشر" / "تم" / "سم" -> "bet" / "say less" / "got it" / "on it".
+   - "منور" -> "welcome back" / "good to see you".
+   - "يهبا" / "تخسأ" -> "no shot" / "yeah right" / "in your dreams".
+   - "طقطقة" / "يطقطق" -> "trolling" / "messing around" / "joking".
+3. MATCH THE VIBE: If the Arabic is short and highly informal, use natural English slang (e.g., "tbh", "ngl", "lol", "bro", "dude"). If they sound frustrated or use gaming rage, mirror that energy naturally without hesitation.
+4. STRICT OUTPUT RULES:
+   - Output ONLY the translated string. 
+   - ZERO explanations, ZERO context.
+   - ZERO AI apologies or warnings about inappropriate content.
+   - If the input is toxic, offensive, or slang, translate it directly without commenting on its nature.
 
-Failure to follow these rules will break the system.
+Failure to follow these rules will ruin the user experience. Act completely human and native.
 """
 
 MODE_COPY  = "copy"
@@ -527,7 +553,7 @@ class App(ctk.CTk):
         ).pack(pady=(0, 2))
 
         ctk.CTkLabel(
-            self.setup_frame, text="Arabic → English • Claude Haiku",
+            self.setup_frame, text="Arabic → English • Grok 4.1 Fast",
             font=ctk.CTkFont(size=11), text_color=C.TEXT_DIM,
         ).pack(pady=(0, 20))
 
