@@ -31,8 +31,8 @@ pyinstaller --noconfirm ^
     --onefile ^
     --windowed ^
     --name "Translation Bridge" ^
-    --icon "icon.ico" ^
-    --add-data "logo.png;." ^
+    --icon "assets\icon.ico" ^
+    --add-data "assets\logo.png;assets" ^
     --add-data ".api_key;." ^
     --hidden-import customtkinter ^
     --hidden-import PIL ^

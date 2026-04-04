@@ -59,9 +59,11 @@ def get_monitor_from_point(x, y):
 # ─────────────────────────────────────────────────────────────
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(APP_DIR, "assets")
 API_KEY_FILE = os.path.join(APP_DIR, ".api_key")
 CONFIG_FILE = os.path.join(APP_DIR, ".config.json")
-LOGO_FILE = os.path.join(APP_DIR, "logo.png")
+LOGO_FILE = os.path.join(ASSETS_DIR, "logo.png")
+ICON_FILE = os.path.join(ASSETS_DIR, "icon.ico")
 
 DEFAULT_HOTKEY = "ctrl+shift+t"
 
@@ -318,11 +320,11 @@ class App(ctk.CTk):
 
         if HAS_PIL and os.path.exists(LOGO_FILE):
             try:
-                ico = os.path.join(APP_DIR, "icon.ico")
-                if not os.path.exists(ico):
+                if not os.path.exists(ICON_FILE):
+                    os.makedirs(ASSETS_DIR, exist_ok=True)
                     img = Image.open(LOGO_FILE).resize((64, 64), Image.LANCZOS)
-                    img.save(ico, format="ICO", sizes=[(64, 64)])
-                self.iconbitmap(ico)
+                    img.save(ICON_FILE, format="ICO", sizes=[(64, 64)])
+                self.iconbitmap(ICON_FILE)
             except Exception:
                 pass
 
