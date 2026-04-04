@@ -229,6 +229,7 @@ class App(ctk.CTk):
         self._last_hwnd = None
         self._t0 = 0
         self._hotkey_popup = None
+        self._hotkey_handle = None
 
         self._setup_window()
 
@@ -361,25 +362,27 @@ class App(ctk.CTk):
             return
         hk = self.cfg.get("hotkey", DEFAULT_HOTKEY)
         try:
-            kb.add_hotkey(hk, self._on_hotkey, suppress=True)
+            self._hotkey_handle = kb.add_hotkey(hk, self._on_hotkey, suppress=False)
         except Exception:
             pass
 
     def _unregister_hotkey(self):
-        if HAS_KB:
+        if HAS_KB and self._hotkey_handle is not None:
             try:
-                kb.unhook_all_hotkeys()
+                kb.remove_hotkey(self._hotkey_handle)
             except Exception:
                 pass
+            self._hotkey_handle = None
 
     def _on_hotkey(self):
         """Called from hotkey thread — schedule popup on main thread."""
         self.after(0, self._show_quick_popup)
 
     def _show_quick_popup(self):
-        """Show a small floating translation popup."""
+        """Toggle the quick translation popup."""
         if self._hotkey_popup and self._hotkey_popup.winfo_exists():
-            self._hotkey_popup.focus_set()
+            self._hotkey_popup.destroy()
+            self._hotkey_popup = None
             return
 
         p = ctk.CTkToplevel(self)
@@ -443,7 +446,8 @@ class App(ctk.CTk):
         )
 
         def _close(e=None):
-            p.destroy()
+            if p.winfo_exists():
+                p.destroy()
             self._hotkey_popup = None
 
         def _go(e=None):
@@ -455,29 +459,39 @@ class App(ctk.CTk):
             status_lbl.pack(side="right", padx=(0, 10))
             status_lbl.configure(text="⏳")
 
+            def _handle_error(msg):
+                if p.winfo_exists():
+                    status_lbl.configure(text=f"❌ {msg}", text_color=C.ERROR)
+                    p.after(2000, _close)
+
             def _do():
                 def on_done(result):
                     pyperclip.copy(result)
                     self.after(0, _paste_and_close, result)
                 def on_error(msg):
-                    self.after(0, lambda: status_lbl.configure(text=f"❌ {msg}", text_color=C.ERROR))
-                    self.after(2000, _close)
+                    self.after(0, lambda: _handle_error(msg))
                 self.translator.stream(txt, on_done=on_done, on_error=on_error)
 
             threading.Thread(target=_do, daemon=True).start()
 
         def _paste_and_close(result):
+            if not p.winfo_exists():
+                return
             p.destroy()
             self._hotkey_popup = None
-            # Small delay then paste
             mode = self.send_mode.get()
             if mode == MODE_COPY:
                 return  # already in clipboard
-            time.sleep(0.2)
-            self._kb_ctrl_v()
-            if mode == MODE_SEND:
-                time.sleep(0.15)
-                self._kb_enter()
+            # Run paste/send in a background thread to avoid blocking the main thread
+            def _do_paste_send():
+                time.sleep(0.2)
+                self._release_all_modifiers()
+                time.sleep(0.05)
+                self._kb_ctrl_v()
+                if mode == MODE_SEND:
+                    time.sleep(0.15)
+                    self._kb_enter()
+            threading.Thread(target=_do_paste_send, daemon=True).start()
 
         entry.bind("<Return>", _go)
         entry.bind("<Escape>", _close)
@@ -929,6 +943,8 @@ class App(ctk.CTk):
         time.sleep(0.3)
         self._switch_win()
         time.sleep(0.5)
+        self._release_all_modifiers()
+        time.sleep(0.05)
         pyperclip.copy(text)
         self._kb_ctrl_v()
         if enter:
@@ -949,9 +965,11 @@ class App(ctk.CTk):
                     tt = user32.GetWindowThreadProcessId(self._last_hwnd, None)
                     ct = k32.GetCurrentThreadId()
                     user32.AttachThreadInput(ct, tt, True)
-                    user32.BringWindowToTop(self._last_hwnd)
-                    user32.SetForegroundWindow(self._last_hwnd)
-                    user32.AttachThreadInput(ct, tt, False)
+                    try:
+                        user32.BringWindowToTop(self._last_hwnd)
+                        user32.SetForegroundWindow(self._last_hwnd)
+                    finally:
+                        user32.AttachThreadInput(ct, tt, False)
                     time.sleep(0.3)
                     if user32.GetForegroundWindow() == self._last_hwnd:
                         ok = True
@@ -959,11 +977,18 @@ class App(ctk.CTk):
                 pass
         if not ok:
             UP = 0x0002
-            user32.keybd_event(0x12, 0, 0, 0)
-            user32.keybd_event(0x09, 0, 0, 0)
-            time.sleep(0.05)
-            user32.keybd_event(0x09, 0, UP, 0)
-            user32.keybd_event(0x12, 0, UP, 0)
+            EXT = 0x0001
+            try:
+                user32.keybd_event(0x12, 0, EXT, 0)        # Alt down
+                user32.keybd_event(0x09, 0, 0, 0)          # Tab down
+                time.sleep(0.05)
+                user32.keybd_event(0x09, 0, UP, 0)          # Tab up
+                user32.keybd_event(0x12, 0, UP | EXT, 0)    # Alt up
+            except Exception:
+                pass
+            finally:
+                # Safety: ensure Alt is released
+                user32.keybd_event(0x12, 0, UP | EXT, 0)
             time.sleep(0.5)
 
     def _restore(self):
@@ -987,6 +1012,7 @@ class App(ctk.CTk):
         self.iconify(); self.update()
         def _s():
             time.sleep(0.3); self._switch_win(); time.sleep(1.5)
+            self._release_all_modifiers(); time.sleep(0.05)
             pyperclip.copy(text); self._kb_ctrl_v()
             if enter: time.sleep(0.2); self._kb_enter()
             time.sleep(0.4); self.after(0, self._manual_done)
@@ -1014,20 +1040,39 @@ class App(ctk.CTk):
         self.stat.configure(text=msg, text_color=color)
 
     @staticmethod
+    def _release_all_modifiers():
+        """Force-release all modifier keys to prevent stuck keys."""
+        UP = 0x0002
+        EXT = 0x0001
+        user32.keybd_event(0x10, 0, UP, 0)          # Shift
+        user32.keybd_event(0x11, 0, UP, 0)          # Ctrl
+        user32.keybd_event(0x12, 0, UP | EXT, 0)    # Alt
+        user32.keybd_event(0xA0, 0, UP, 0)          # LShift
+        user32.keybd_event(0xA1, 0, UP, 0)          # RShift
+        user32.keybd_event(0xA2, 0, UP, 0)          # LCtrl
+        user32.keybd_event(0xA3, 0, UP, 0)          # RCtrl
+        user32.keybd_event(0xA4, 0, UP | EXT, 0)    # LAlt
+        user32.keybd_event(0xA5, 0, UP | EXT, 0)    # RAlt
+        user32.keybd_event(0x5B, 0, UP | EXT, 0)    # LWin
+        user32.keybd_event(0x5C, 0, UP | EXT, 0)    # RWin
+
+    @staticmethod
     def _kb_ctrl_v():
         UP = 0x0002
-        user32.keybd_event(0x11, 0, 0, 0)
-        user32.keybd_event(0x56, 0, 0, 0)
-        time.sleep(0.05)
-        user32.keybd_event(0x56, 0, UP, 0)
-        user32.keybd_event(0x11, 0, UP, 0)
+        try:
+            user32.keybd_event(0x11, 0, 0, 0)      # Ctrl down
+            user32.keybd_event(0x56, 0, 0, 0)      # V down
+            time.sleep(0.05)
+            user32.keybd_event(0x56, 0, UP, 0)      # V up
+        finally:
+            user32.keybd_event(0x11, 0, UP, 0)      # Ctrl up (always)
 
     @staticmethod
     def _kb_enter():
         UP = 0x0002
-        user32.keybd_event(0x0D, 0, 0, 0)
+        user32.keybd_event(0x0D, 0, 0, 0)          # Enter down
         time.sleep(0.05)
-        user32.keybd_event(0x0D, 0, UP, 0)
+        user32.keybd_event(0x0D, 0, UP, 0)          # Enter up
 
 
 # ─────────────────────────────────────────────────────────────
