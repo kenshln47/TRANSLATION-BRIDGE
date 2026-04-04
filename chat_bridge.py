@@ -541,12 +541,12 @@ class App(ctk.CTk):
                 return  # already in clipboard
             # Run paste/send in a background thread to avoid blocking the main thread
             def _do_paste_send():
-                time.sleep(0.2)
+                time.sleep(0.1)
                 self._release_all_modifiers()
                 time.sleep(0.05)
                 self._kb_ctrl_v()
                 if mode == MODE_SEND:
-                    time.sleep(0.15)
+                    time.sleep(0.08)
                     self._kb_enter()
             threading.Thread(target=_do_paste_send, daemon=True).start()
 
@@ -997,17 +997,17 @@ class App(ctk.CTk):
     # ── AUTO-PASTE ──
 
     def _do_paste(self, text, enter):
-        time.sleep(0.3)
+        time.sleep(0.15)
         self._switch_win()
-        time.sleep(0.5)
+        time.sleep(0.25)
         self._release_all_modifiers()
         time.sleep(0.05)
         self._safe_copy(text)
         self._kb_ctrl_v()
         if enter:
-            time.sleep(0.2)
+            time.sleep(0.1)
             self._kb_enter()
-        time.sleep(0.4)
+        time.sleep(0.2)
         self.after(0, self._restore)
 
     def _switch_win(self):
