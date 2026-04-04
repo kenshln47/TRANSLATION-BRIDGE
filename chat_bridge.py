@@ -68,8 +68,30 @@ else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSETS_DIR = os.path.join(APP_DIR, "assets")
 
-API_KEY_FILE = os.path.join(APP_DIR, ".api_key")
-CONFIG_FILE = os.path.join(APP_DIR, ".config.json")
+APP_DATA_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "TranslationBridge")
+os.makedirs(APP_DATA_DIR, exist_ok=True)
+
+API_KEY_FILE = os.path.join(APP_DATA_DIR, ".api_key")
+CONFIG_FILE = os.path.join(APP_DATA_DIR, ".config.json")
+
+# Migration from old portable format
+old_api_key_file = os.path.join(APP_DIR, ".api_key")
+old_config_file = os.path.join(APP_DIR, ".config.json")
+
+if os.path.exists(old_api_key_file) and not os.path.exists(API_KEY_FILE):
+    try:
+        import shutil
+        shutil.copy(old_api_key_file, API_KEY_FILE)
+    except Exception:
+        pass
+
+if os.path.exists(old_config_file) and not os.path.exists(CONFIG_FILE):
+    try:
+        import shutil
+        shutil.copy(old_config_file, CONFIG_FILE)
+    except Exception:
+        pass
+
 LOGO_FILE = os.path.join(ASSETS_DIR, "logo.png")
 ICON_FILE = os.path.join(ASSETS_DIR, "icon.ico")
 
@@ -880,7 +902,7 @@ class App(ctk.CTk):
     def _api_ok(self, ok, msg):
         if ok:
             self.api_dot.configure(text_color=C.SUCCESS)
-            self.api_lbl.configure(text="✓ Claude Haiku — Ready", text_color=C.SUCCESS)
+            self.api_lbl.configure(text="✓ Grok 4.1 Fast — Ready", text_color=C.SUCCESS)
         else:
             self.api_dot.configure(text_color=C.ERROR)
             self.api_lbl.configure(text=msg, text_color=C.ERROR)
