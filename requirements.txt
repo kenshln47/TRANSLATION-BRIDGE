@@ -1,0 +1,8 @@
+customtkinter
+httpx
+pyautogui
+pyperclip
+openai
+Pillow
+keyboard
+pystray

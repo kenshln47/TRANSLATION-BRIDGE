@@ -1,0 +1,8 @@
+.venv/
+.api_key
+.config.json
+__pycache__/
+build/
+dist/
+*.spec
+icon.ico
