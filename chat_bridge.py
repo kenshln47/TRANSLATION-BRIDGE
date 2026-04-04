@@ -475,7 +475,7 @@ class App(ctk.CTk):
 
             def _do():
                 def on_done(result):
-                    pyperclip.copy(result)
+                    App._safe_copy(result)
                     self.after(0, _paste_and_close, result)
                 def on_error(msg):
                     self.after(0, lambda: _handle_error(msg))
@@ -924,7 +924,7 @@ class App(ctk.CTk):
         if result.startswith("["):
             self._status(f"❌ {result}", C.ERROR); return
         self._show_preview(result)
-        pyperclip.copy(result)
+        self._safe_copy(result)
         self.cp_lbl.configure(text="✓ Copied")
         self.send_btn.configure(state="normal")
         mode = self.send_mode.get()
@@ -954,7 +954,7 @@ class App(ctk.CTk):
         time.sleep(0.5)
         self._release_all_modifiers()
         time.sleep(0.05)
-        pyperclip.copy(text)
+        self._safe_copy(text)
         self._kb_ctrl_v()
         if enter:
             time.sleep(0.2)
@@ -1022,7 +1022,7 @@ class App(ctk.CTk):
         def _s():
             time.sleep(0.3); self._switch_win(); time.sleep(1.5)
             self._release_all_modifiers(); time.sleep(0.05)
-            pyperclip.copy(text); self._kb_ctrl_v()
+            self._safe_copy(text); self._kb_ctrl_v()
             if enter: time.sleep(0.2); self._kb_enter()
             time.sleep(0.4); self.after(0, self._manual_done)
         threading.Thread(target=_s, daemon=True).start()
@@ -1064,6 +1064,17 @@ class App(ctk.CTk):
         user32.keybd_event(0xA5, 0, UP | EXT, 0)    # RAlt
         user32.keybd_event(0x5B, 0, UP | EXT, 0)    # LWin
         user32.keybd_event(0x5C, 0, UP | EXT, 0)    # RWin
+
+    @staticmethod
+    def _safe_copy(text):
+        """Safely copy text to clipboard, retrying if the clipboard is locked."""
+        for _ in range(3):
+            try:
+                pyperclip.copy(text)
+                return True
+            except Exception:
+                time.sleep(0.1)
+        return False
 
     @staticmethod
     def _kb_ctrl_v():
