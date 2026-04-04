@@ -3,7 +3,7 @@ Translation Bridge v7.0
 Arabic -> English via OpenRouter (Claude 3.5 Haiku)
 
 Dependencies:
-  pip install customtkinter pyautogui pyperclip openai httpx Pillow keyboard pystray
+  pip install customtkinter pyperclip openai httpx Pillow keyboard pystray
 """
 
 import ctypes
@@ -14,7 +14,6 @@ import time
 
 import customtkinter as ctk
 import httpx
-import pyautogui
 import pyperclip
 from openai import OpenAI
 import pystray
