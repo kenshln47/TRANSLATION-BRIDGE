@@ -26,14 +26,13 @@ echo.
 if exist "build" rmdir /s /q build
 if exist "Translation Bridge.spec" del /q "Translation Bridge.spec"
 
-:: Build the exe
+:: Build the exe (optimized)
 pyinstaller --noconfirm ^
     --onefile ^
     --windowed ^
     --name "Translation Bridge" ^
     --icon "assets\icon.ico" ^
     --add-data "assets\logo.png;assets" ^
-    --add-data ".api_key;." ^
     --hidden-import customtkinter ^
     --hidden-import PIL ^
     --hidden-import keyboard ^
@@ -41,6 +40,18 @@ pyinstaller --noconfirm ^
     --exclude-module numpy ^
     --exclude-module pandas ^
     --exclude-module matplotlib ^
+    --exclude-module scipy ^
+    --exclude-module IPython ^
+    --exclude-module notebook ^
+    --exclude-module pytest ^
+    --exclude-module unittest ^
+    --exclude-module doctest ^
+    --exclude-module pdb ^
+    --exclude-module tkinter.test ^
+    --exclude-module lib2to3 ^
+    --exclude-module xmlrpc ^
+    --exclude-module pydoc ^
+    --optimize 2 ^
     chat_bridge.py
 
 echo.

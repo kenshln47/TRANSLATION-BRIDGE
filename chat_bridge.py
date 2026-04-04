@@ -9,6 +9,7 @@ Dependencies:
 import ctypes
 import json
 import os
+import sys
 import threading
 import time
 
@@ -58,8 +59,15 @@ def get_monitor_from_point(x, y):
 # PATHS & CONFIG
 # ─────────────────────────────────────────────────────────────
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-ASSETS_DIR = os.path.join(APP_DIR, "assets")
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller EXE
+    APP_DIR = os.path.dirname(sys.executable)
+    ASSETS_DIR = os.path.join(sys._MEIPASS, "assets")
+else:
+    # Running as Python script
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    ASSETS_DIR = os.path.join(APP_DIR, "assets")
+
 API_KEY_FILE = os.path.join(APP_DIR, ".api_key")
 CONFIG_FILE = os.path.join(APP_DIR, ".config.json")
 LOGO_FILE = os.path.join(ASSETS_DIR, "logo.png")
@@ -1077,9 +1085,31 @@ class App(ctk.CTk):
 
 
 # ─────────────────────────────────────────────────────────────
+# SINGLE INSTANCE LOCK
+# ─────────────────────────────────────────────────────────────
+
+MUTEX_NAME = "TranslationBridge_SingleInstance_Mutex"
+
+def enforce_single_instance():
+    """Prevent multiple instances using a Windows named mutex."""
+    kernel32 = ctypes.windll.kernel32
+    mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        # Another instance is running — find its window and bring it forward
+        hwnd = user32.FindWindowW(None, "Translation Bridge")
+        if hwnd:
+            if user32.IsIconic(hwnd):
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+        sys.exit(0)
+    return mutex  # Must keep a reference so the mutex stays alive
+
+
+# ─────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    _mutex = enforce_single_instance()
     app = App()
     app.mainloop()
