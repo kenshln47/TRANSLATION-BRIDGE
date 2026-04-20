@@ -1,10 +1,96 @@
-# جسر الترجمة (Translation Bridge)
+<div align="center">
 
-جسر الترجمة هو تطبيق مخصص لنظام ويندوز صُمم خصيصاً لمجتمعات اللاعبين (Gamers) والبيئات التنافسية. يدعم أكثر من 14 لغة مع إمكانية الترجمة من أي لغة إلى أي لغة أخرى. يتميز بذكاء اصطناعي يفهم العامية والسياق ويترجم بأسلوب يناسب ثقافة الألعاب، وذلك بشكل فوري وفي الخلفية دون مقاطعة اللعب.
+<img src="assets/banner.png" alt="Translation Bridge Banner" width="100%">
 
-## هيكلية التطبيق وتدفق البيانات
+<br><br>
 
-يتعامل التطبيق مع البيانات الداخلية عبر مسار حقن صارم لضمان أقصى درجات الدقة في السياق، مع انعدام كامل لزمن التأخير (اللاق).
+# ⚡ Translation Bridge — جسر الترجمة
+
+### ترجم بسرعة البرق وأنت تلعب
+
+<br>
+
+[![GitHub release](https://img.shields.io/github/v/release/kenshln47/TRANSLATION-BRIDGE?style=for-the-badge&color=3ecf8e&label=Download)](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases)
+
+<br>
+
+[![Stars](https://img.shields.io/github/stars/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/stargazers)
+[![Forks](https://img.shields.io/github/forks/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/network/members)
+[![Issues](https://img.shields.io/github/issues/kenshln47/TRANSLATION-BRIDGE?style=flat-square)](https://github.com/kenshln47/TRANSLATION-BRIDGE/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/commits/main)
+
+<br>
+
+**اكتب بلغتك → يرسل بأي لغة ثانية. بدون لاق، بدون تأخير.**
+
+🇸🇦 عربي • 🇬🇧 English • 🇹🇷 Türkçe • 🇪🇸 Español • 🇫🇷 Français • 🇧🇷 Português • 🇷🇺 Русский • 🇩🇪 Deutsch • 🇰🇷 한국어 • 🇯🇵 日本語 • 🇮🇳 हिंदी • 🇨🇳 中文
+
+<br>
+
+[📥 تحميل مجاني](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases) · [🌐 الموقع](https://kenshln47.github.io/TRANSLATION-BRIDGE/) · [🐛 بلّغ عن مشكلة](https://github.com/kenshln47/TRANSLATION-BRIDGE/issues)
+
+</div>
+
+<br>
+
+---
+
+<br>
+
+## 🎯 وش هو Translation Bridge؟
+
+تطبيق مخصص لنظام ويندوز صُمم خصيصاً لمجتمعات اللاعبين (Gamers). يدعم أكثر من **14 لغة** مع ذكاء اصطناعي يفهم **العامية والسياق** ويترجم بأسلوب يناسب ثقافة الألعاب — بشكل فوري وبالخلفية بدون مقاطعة اللعب.
+
+<br>
+
+## ✨ المميزات
+
+<table>
+<tr>
+<td width="50%">
+
+### ⚡ Zero-Lag Hotkeys
+اختصارات مربوطة مباشرة بـ Windows API — يستهلك **0% CPU** ولا يسبب أي انخفاض بالفريمات
+
+### 🌍 14+ لغة
+اختار أي لغة مصدر وأي لغة هدف — عربي، إنجليزي، تركي، كوري، ياباني وغيرها
+
+### 🧠 AI يفهم السياق
+يستخدم **Grok 4.1 Fast** — يفهم العامية والجنس من تصريف الفعل. مو ترجمة حرفية
+
+</td>
+<td width="50%">
+
+### 🎮 Game Presets
+قواميس جاهزة لـ GTA RP، Valorant، FIFA، LoL، Fortnite وغيرها
+
+### 👻 Ghost UX
+نافذة الإدخال تدمر نفسها فوراً — ترجع للعبة بأجزاء من الثانية
+
+### 🤬 4 أنماط ترجمة
+Gamer عادي • Chill مريح • Formal رسمي • Rage Mode 🔥
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## 🔧 كيف يشتغل؟
+
+```
+   ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+   │  1️⃣  اضغط        │────▶│  2️⃣  اكتب بلغتك   │────▶│  3️⃣  Enter وخلاص │
+   │  Ctrl+Shift+T   │     │  بالنافذة الشفافة │     │  يرسل بالشات    │
+   └─────────────────┘     └──────────────────┘     └─────────────────┘
+```
+
+<br>
+
+## 📊 هيكلية التطبيق
 
 ```mermaid
 graph TD
@@ -27,60 +113,126 @@ graph TD
     J -->|"نظام الحقن الشبح (Ghost UX)"| K["واجهة اللعبة النشطة"]
 ```
 
-## بنية المشروع
+<br>
+
+## 🎮 الألعاب المدعومة
+
+<div align="center">
+
+| اللعبة | المصطلحات المتخصصة |
+|:------:|:------------------:|
+| 🚗 **GTA V RP** | VDM, RDM, NVL, OOC, كود 10 |
+| 🔫 **Valorant / CS2** | Peek, Rotate, Eco, Flash, Clutch |
+| ⚽ **EA FC (FIFA)** | Through ball, Finesse, SBC, TOTS |
+| 🧙 **LoL / Dota 2** | Gank, Dive, Feed, Baron, FF |
+| 🦸 **Overwatch / Apex** | Ult, Crack, Knock, Third-party |
+| 🏗️ **Fortnite** | Box, Crank, Edit, Storm, Rotate |
+| ⛏️ **Minecraft / Roblox** | Grief, Raid, Enchant, Obby |
+
+</div>
+
+<br>
+
+## 📁 بنية المشروع
 
 ```
-CHAT helper/
-├── chat_bridge.py              # نقطة الدخول (Wrapper)
-├── chat_bridge/                # الحزمة الرئيسية
-│   ├── __main__.py             # نقطة الدخول + Logging + Single Instance
-│   ├── app.py                  # التطبيق الرئيسي (UI + Logic)
-│   ├── translator.py           # محرك الترجمة (OpenRouter API)
-│   ├── config.py               # إدارة الإعدادات + المفاتيح + التاريخ
-│   ├── hotkey.py               # نظام الاختصارات الأصلي (Win32 API)
-│   ├── tray.py                 # System Tray
-│   ├── constants.py            # الثوابت والـ Prompts والـ Presets
-│   └── ui/
-│       ├── theme.py            # ألوان التصميم
-│       ├── setup_screen.py     # شاشة الإعداد الأولي
-│       ├── main_screen.py      # واجهة الشاشة الرئيسية
-│       ├── settings.py         # نافذة الإعدادات
-│       ├── toast.py            # إشعارات Toast
-│       └── history.py          # سجل الترجمات
-├── assets/                     # الأصول (logo, icon)
-├── website/                    # صفحة الموقع (Landing Page)
-├── requirements.txt
-├── build.bat                   # بناء ملف EXE
-└── README.md
+TRANSLATION-BRIDGE/
+├── 📄 chat_bridge.py              ← نقطة الدخول
+├── 📦 chat_bridge/                ← الحزمة الرئيسية
+│   ├── __main__.py               ← Entry + Logging + Single Instance
+│   ├── app.py                    ← التطبيق الرئيسي (UI + Logic)
+│   ├── translator.py             ← محرك الترجمة (OpenRouter API)
+│   ├── config.py                 ← إدارة الإعدادات + المفاتيح
+│   ├── hotkey.py                 ← اختصارات Win32 الأصلية
+│   ├── tray.py                   ← System Tray
+│   ├── constants.py              ← الثوابت والـ Prompts
+│   └── 🎨 ui/
+│       ├── theme.py              ← ألوان التصميم
+│       ├── setup_screen.py       ← شاشة الإعداد الأولي
+│       ├── settings.py           ← نافذة الإعدادات
+│       ├── toast.py              ← إشعارات Toast
+│       └── history.py            ← سجل الترجمات
+├── 🖼️ assets/                     ← الأصول (logo, icon, banner)
+├── 🌐 docs/                       ← صفحة الموقع (GitHub Pages)
+├── 📋 requirements.txt
+├── 🔨 build.bat                   ← بناء ملف EXE
+└── 📜 LICENSE                     ← MIT License
 ```
 
-## الميزات الهندسية الأساسية
+<br>
 
-- **دعم متعدد اللغات (14+ لغة):** يدعم الترجمة من أي لغة إلى أي لغة أخرى — عربي، إنجليزي، تركي، كوري، روسي، ياباني، فرنسي، ألماني وغيرها. مع خيارات مستقلة للغة المصدر ولغة الهدف.
-- **اختصارات أصلية بلا تأخير (Zero-Lag Hotkeys):** ترتبط مباشرة بحلقة رسائل نظام ويندوز (Message Loop عبر `user32 RegisterHotKey`). يستهلك البرنامج 0% من قدرة المعالج ولا يسبب أي انخفاض في الإطارات أثناء المباريات التنافسية.
-- **وعي بالسياق والجنس (Context & Gender Awareness):** يكشف الذكاء الاصطناعي الجنس من تصريف الفعل العربي ويترجم بشكل مناسب — يفرّق بين مخاطبة الذكر والأنثى.
-- **وضع الإخفاء الشبح (Ghost UX):** تقوم واجهة الإدخال بتدمير نفسها فور إرسال الطلب، مما يتيح للاعب استعادة التحكم الكامل باللعبة في أجزاء من الثانية.
-- **التشكيل الديناميكي للبيانات (Modular Profiling):** يمكن للمستخدمين استيراد ملفات نصية لتدريب البرنامج كقواعد صارمة.
-- **سجل الترجمات (Translation History):** يحفظ آخر 50 ترجمة مع إمكانية النسخ بضغطة واحدة.
-- **إشعارات فورية (Toast Notifications):** إشعارات متحركة عند نجاح أو فشل الترجمة.
-- **نظام تسجيل ذكي (Logging):** يسجل جميع العمليات في ملف log داخل APPDATA لتسهيل تشخيص المشاكل.
+## 🚀 التثبيت والتشغيل
 
-## التثبيت والتشغيل
+### الطريقة السريعة (EXE)
 
-### المتطلبات الأساسية
-يتطلب وجود بيئة (Python 3.10) أو أحدث.
+> حمّل الملف التنفيذي من [صفحة التحميل](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases) وشغّله مباشرة — ما يحتاج تثبيت.
 
-```cmd
+### من الكود المصدري
+
+```bash
+# 1. استنسخ المشروع
+git clone https://github.com/kenshln47/TRANSLATION-BRIDGE.git
+cd TRANSLATION-BRIDGE
+
+# 2. ثبّت المتطلبات
 pip install -r requirements.txt
+
+# 3. شغّل
 python chat_bridge.py
 ```
 
-### بناء النسخة النهائية
-لتحويل التطبيق إلى ملف تنفيذي مستقل `.exe` لا يحتاج إلى تثبيت بايثون:
-```cmd
-.\build.bat
-```
-سيتم إنشاء الملف النهائي داخل مجلد `dist/`.
+### بناء الـ EXE بنفسك
 
-## الخصوصية والأمان
-تُعالج وتحفظ جميع مفاتيح الـ (API)، وملفات القواميس المستوردة، وقواعد البيانات محلياً كملفات (JSON) داخل مسار التطبيق. تم تعطيل عمليات التتبع بالكامل، وتُرسل سلاسل النصوص المراد ترجمتها مباشرة من الذاكرة العشوائية إلى خوادم الـ API دون تسجيلها في أي وسيط.
+```bash
+.\build.bat
+# الملف النهائي: dist/Translation Bridge.exe
+```
+
+<br>
+
+## ⚙️ المتطلبات
+
+| المتطلب | التفاصيل |
+|:-------:|:--------:|
+| نظام التشغيل | Windows 10 / 11 |
+| Python | 3.10+ (للتشغيل من الكود) |
+| API Key | [OpenRouter](https://openrouter.ai/keys) (فيه باقة مجانية) |
+
+<br>
+
+## 🔒 الخصوصية والأمان
+
+- 🔑 مفاتيح الـ API تُحفظ محلياً في `%APPDATA%/TranslationBridge/`
+- 🚫 **لا تتبع** — لا تحليلات — لا بيانات تُرسل لأي طرف ثالث
+- 📡 النصوص تُرسل مباشرة للـ API وما تُسجّل بأي وسيط
+- 🔓 مفتوح المصدر بالكامل — راجع الكود بنفسك
+
+<br>
+
+## 🤝 المساهمة
+
+المشروع مفتوح للمساهمة! إذا عندك فكرة أو تحسين:
+
+1. سوي Fork للمشروع
+2. أنشئ branch جديد (`git checkout -b feature/اسم-الميزة`)
+3. سوي Commit (`git commit -m 'إضافة ميزة جديدة'`)
+4. ادفع التغييرات (`git push origin feature/اسم-الميزة`)
+5. افتح Pull Request
+
+<br>
+
+## 📄 الرخصة
+
+هذا المشروع مرخّص تحت [رخصة MIT](LICENSE) — استخدمه، عدّل عليه، وزّعه بكل حرية.
+
+<br>
+
+---
+
+<div align="center">
+
+**صُنع بـ ❤️ للقيمرز العرب**
+
+⭐ لو عجبك المشروع، لا تنسى تعطيه Star!
+
+</div>
