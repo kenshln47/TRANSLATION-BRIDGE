@@ -209,7 +209,7 @@ python chat_bridge.py
 
 <br>
 
-## 🤝 تبي تساعد؟؟
+## 🤝 تبي تساعد؟؟؟
 
 لو عندك فكرة أو لقيت بق، افتح Issue أو سوي Pull Request.
 
