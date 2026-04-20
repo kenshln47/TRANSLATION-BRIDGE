@@ -3,5 +3,4 @@ httpx
 pyperclip
 openai
 Pillow
-keyboard
 pystray

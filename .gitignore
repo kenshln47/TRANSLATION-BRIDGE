@@ -2,6 +2,8 @@
 .api_key
 .config.json
 __pycache__/
+chat_bridge/__pycache__/
+chat_bridge/ui/__pycache__/
 build/
 dist/
 *.spec

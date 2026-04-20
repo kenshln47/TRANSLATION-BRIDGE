@@ -11,13 +11,6 @@ if %errorlevel% neq 0 (
     pip install pyinstaller
 )
 
-:: Check if keyboard is installed
-pip show keyboard >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Installing keyboard library...
-    pip install keyboard
-)
-
 echo.
 echo Building Translation Bridge.exe ...
 echo.
@@ -35,8 +28,22 @@ pyinstaller --noconfirm ^
     --add-data "assets\logo.png;assets" ^
     --hidden-import customtkinter ^
     --hidden-import PIL ^
-    --hidden-import keyboard ^
     --hidden-import pystray ^
+    --hidden-import chat_bridge ^
+    --hidden-import chat_bridge.app ^
+    --hidden-import chat_bridge.translator ^
+    --hidden-import chat_bridge.config ^
+    --hidden-import chat_bridge.hotkey ^
+    --hidden-import chat_bridge.tray ^
+    --hidden-import chat_bridge.constants ^
+    --hidden-import chat_bridge.ui ^
+    --hidden-import chat_bridge.ui.theme ^
+    --hidden-import chat_bridge.ui.setup_screen ^
+    --hidden-import chat_bridge.ui.main_screen ^
+    --hidden-import chat_bridge.ui.settings ^
+    --hidden-import chat_bridge.ui.toast ^
+    --hidden-import chat_bridge.ui.history ^
+    --exclude-module keyboard ^
     --exclude-module numpy ^
     --exclude-module pandas ^
     --exclude-module matplotlib ^
