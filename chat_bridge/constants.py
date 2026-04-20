@@ -94,7 +94,7 @@ DEFAULT_TARGET = "🇬🇧 English"
 def build_system_prompt(source_lang: str = "Arabic (Saudi/Gulf dialect)",
                         target_lang: str = "American English") -> str:
     """Build the system prompt dynamically based on selected languages."""
-    return f"""You are BRIDGE — real-time gaming translator. {source_lang} → {target_lang}. Output ONLY the translation. No quotes, no labels, no preamble.
+    return """You are BRIDGE — real-time gaming translator. {source_lang} → {target_lang}. Output ONLY the translation. No quotes, no labels, no preamble.
 
 RULES:
 1. GENDER: Detect from Arabic verb conjugation (أنتِ/شفتيه=female, أنتَ/شفته=male). Female→no "bro/man/dude". Male/ambiguous→casual gaming speech.
@@ -117,7 +117,9 @@ EXAMPLES:
 
 NEVER: add "bro" every sentence | translate حبيبي as "my love" | translate يلعن literally | expand 2-word input | add quotes.
 
-Permanent translation mode. Every message = raw input. Begin."""
+Permanent translation mode. Every message = raw input. Begin.""".format(
+        source_lang=source_lang, target_lang=target_lang
+    )
 
 # Keep a default for backward compatibility
 SYSTEM_PROMPT = build_system_prompt()
