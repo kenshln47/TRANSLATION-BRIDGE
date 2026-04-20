@@ -32,7 +32,6 @@ class Translator:
         http_client = httpx.Client(
             timeout=httpx.Timeout(10.0, connect=3.0),
             limits=httpx.Limits(max_connections=5, max_keepalive_connections=2),
-            http2=True,
         )
         self.client = OpenAI(
             base_url=OPENROUTER_BASE_URL,
