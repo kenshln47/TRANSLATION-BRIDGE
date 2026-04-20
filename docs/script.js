@@ -361,10 +361,7 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     // ── Scroll Reveal ──
-    const revealElements = document.querySelectorAll(
-        '.feature-card, .step, .game-chip, .section-title, .section-subtitle'
-    );
-    revealElements.forEach(el => el.classList.add('reveal'));
+    const revealElements = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver(
         (entries) => {
             entries.forEach(entry => {

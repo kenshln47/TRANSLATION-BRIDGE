@@ -249,13 +249,9 @@ class App(ctk.CTk):
             if not txt:
                 _close()
                 return
-            mode = self.send_mode.get()
-            if mode == MODE_COPY:
-                _close()
-            else:
-                entry.configure(state="disabled")
-                status_lbl.pack(side="right", padx=(0, 10))
-                status_lbl.configure(text="⏳")
+            entry.configure(state="disabled")
+            status_lbl.pack(side="right", padx=(0, 10))
+            status_lbl.configure(text="⏳")
 
             def _handle_error(msg):
                 if p.winfo_exists():
@@ -299,6 +295,9 @@ class App(ctk.CTk):
             self._hotkey_popup = None
 
             if mode == MODE_COPY:
+                # Return focus to the previously active window
+                if self._last_hwnd and user32.IsWindow(self._last_hwnd):
+                    user32.SetForegroundWindow(self._last_hwnd)
                 Toast.show(self, "Copied to clipboard ✅", style="success")
                 return
 
@@ -378,11 +377,13 @@ class App(ctk.CTk):
         card.pack(fill="both", expand=True, pady=(0, 20))
 
         # ── INPUT ──
-        ctk.CTkLabel(
-            card, text="ARABIC TEXT",
+        src = self.cfg.get("source_lang", DEFAULT_SOURCE)
+        self._input_label = ctk.CTkLabel(
+            card, text=f"INPUT — {src}",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color=C.TEXT_DIM,
-        ).pack(anchor="w", padx=20, pady=(20, 8))
+        )
+        self._input_label.pack(anchor="w", padx=20, pady=(20, 8))
 
         irow = ctk.CTkFrame(card, fg_color="transparent")
         irow.pack(fill="x", padx=20, pady=(0, 16))
@@ -417,11 +418,13 @@ class App(ctk.CTk):
         ctk.CTkFrame(card, height=1, fg_color=C.BORDER).pack(fill="x")
 
         # ── PREVIEW ──
-        ctk.CTkLabel(
-            card, text="ENGLISH OUTPUT",
+        tgt = self.cfg.get("target_lang", DEFAULT_TARGET)
+        self._output_label = ctk.CTkLabel(
+            card, text=f"OUTPUT — {tgt}",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color=C.TEXT_DIM,
-        ).pack(anchor="w", padx=20, pady=(16, 8))
+        )
+        self._output_label.pack(anchor="w", padx=20, pady=(16, 8))
 
         self.preview = ctk.CTkTextbox(
             card, height=90, font=ctk.CTkFont(family="Segoe UI", size=15),
@@ -488,11 +491,6 @@ class App(ctk.CTk):
         self.send_mode.set(self.mode_map[idx])
         self.cfg["mode"] = self.send_mode.get()
         save_config(self.cfg)
-
-    # ── SETTINGS ──
-
-    def _show_settings(self):
-        SettingsDialog(self).show()
 
     # ── API CHECK ──
 

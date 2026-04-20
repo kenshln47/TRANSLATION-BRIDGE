@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kenshln47.github.io/TRANSLATION-BRIDGE/sitemap.xml

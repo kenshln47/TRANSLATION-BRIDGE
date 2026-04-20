@@ -85,6 +85,10 @@ class Translator:
             if src_info and tgt_info:
                 sys_prompt = build_system_prompt(src_info[0], tgt_info)
             else:
+                if not src_info:
+                    logger.warning("Unknown source language key: '%s', using default prompt.", source_key)
+                if not tgt_info:
+                    logger.warning("Unknown target language key: '%s', using default prompt.", target_key)
                 sys_prompt = SYSTEM_PROMPT
 
             game_addition = GAME_PRESETS.get(game_mode, "")

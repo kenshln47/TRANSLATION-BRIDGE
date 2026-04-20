@@ -7,6 +7,7 @@ import logging
 import os
 import shutil
 import sys
+import time
 
 from .constants import DEFAULT_HOTKEY, MODE_SEND, DEFAULT_SOURCE, DEFAULT_TARGET
 
@@ -150,11 +151,10 @@ def save_history(history: list):
 
 def add_history_entry(arabic: str, english: str, history: list, max_items: int = 50) -> list:
     """Add an entry and trim to max_items. Returns updated list."""
-    import time as _time
     entry = {
         "ar": arabic,
         "en": english,
-        "ts": _time.strftime("%Y-%m-%d %H:%M:%S"),
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     history.insert(0, entry)
     history = history[:max_items]

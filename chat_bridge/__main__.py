@@ -7,6 +7,7 @@ Run with: python -m chat_bridge
 
 import ctypes
 import logging
+import logging.handlers
 import os
 import sys
 
@@ -25,20 +26,17 @@ def _setup_logging():
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "app.log")
 
-    # Rotate: keep last 500KB
-    if os.path.exists(log_file):
-        try:
-            if os.path.getsize(log_file) > 500_000:
-                os.remove(log_file)
-        except Exception:
-            pass
+    # Rotate: keep last 500KB, 1 backup
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=500_000, backupCount=1, encoding="utf-8"
+    )
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
-            logging.FileHandler(log_file, encoding="utf-8"),
+            file_handler,
             logging.StreamHandler(sys.stdout),
         ],
     )
@@ -68,7 +66,12 @@ def _enforce_single_instance():
 # MAIN
 # ─────────────────────────────────────────────────────────────
 
+# Global reference to prevent garbage collection of the mutex handle
+_mutex = None
+
+
 def main():
+    global _mutex
     _setup_logging()
     _mutex = _enforce_single_instance()
 

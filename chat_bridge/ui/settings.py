@@ -36,6 +36,7 @@ class SettingsDialog:
         d.grab_set()
         d.configure(fg_color=C.BG)
         self._dialog = d
+        d.protocol("WM_DELETE_WINDOW", self._close)
 
         try:
             if os.path.exists(ICON_FILE):
@@ -235,6 +236,11 @@ class SettingsDialog:
             return
         self._hk_btn.configure(text=self._pending_hotkey.upper(), text_color=C.ACCENT)
         self._rec_btn.configure(state="normal")
+        # Re-register hotkey immediately so it's not lost during settings
+        self._app._hotkey.register(
+            self._pending_hotkey,
+            lambda: self._app.after(0, self._app._show_quick_popup)
+        )
 
     def _import_profile(self):
         file_path = ctk.filedialog.askopenfilename(
@@ -270,10 +276,19 @@ class SettingsDialog:
         # Update main UI subtitle to reflect language
         if hasattr(self._app, '_lang_label'):
             self._app._lang_label.configure(
-                text=f"{self._src_var.get()} → {self._tgt_var.get()}"
+                text="{src} → {tgt}".format(src=self._src_var.get(), tgt=self._tgt_var.get())
+            )
+        # Update dynamic input/output labels
+        if hasattr(self._app, '_input_label'):
+            self._app._input_label.configure(
+                text="INPUT — {src}".format(src=self._src_var.get())
+            )
+        if hasattr(self._app, '_output_label'):
+            self._app._output_label.configure(
+                text="OUTPUT — {tgt}".format(tgt=self._tgt_var.get())
             )
 
-        logger.info(f"Settings saved. {self._src_var.get()} → {self._tgt_var.get()}")
+        logger.info("Settings saved. {src} → {tgt}".format(src=self._src_var.get(), tgt=self._tgt_var.get()))
         self._close()
 
     def _close(self):
