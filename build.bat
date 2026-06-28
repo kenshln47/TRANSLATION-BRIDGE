@@ -4,6 +4,11 @@ echo   Translation Bridge - EXE Builder
 echo ==========================================
 echo.
 
+:: Make sure all runtime dependencies are present in THIS Python, otherwise
+:: PyInstaller silently builds an exe that crashes with "No module named ...".
+echo Installing/verifying dependencies...
+pip install -r requirements.txt
+
 :: Check if pyinstaller is installed
 pip show pyinstaller >nul 2>&1
 if %errorlevel% neq 0 (
@@ -26,9 +31,10 @@ pyinstaller --noconfirm ^
     --name "Translation Bridge" ^
     --icon "assets\icon.ico" ^
     --add-data "assets\logo.png;assets" ^
-    --hidden-import customtkinter ^
+    --collect-all customtkinter ^
+    --collect-all darkdetect ^
     --hidden-import PIL ^
-    --hidden-import pystray ^
+    --collect-all pystray ^
     --hidden-import chat_bridge ^
     --hidden-import chat_bridge.app ^
     --hidden-import chat_bridge.translator ^
