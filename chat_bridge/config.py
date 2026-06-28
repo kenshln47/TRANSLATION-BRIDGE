@@ -9,7 +9,9 @@ import shutil
 import sys
 import time
 
-from .constants import DEFAULT_HOTKEY, MODE_SEND, DEFAULT_SOURCE, DEFAULT_TARGET
+from .constants import (
+    DEFAULT_HOTKEY, MODE_SEND, DEFAULT_SOURCE, DEFAULT_TARGET, DEFAULT_MODEL_LABEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,7 @@ _DEFAULT_CONFIG = {
     "game": "General",
     "tone": "Gamer (Default)",
     "custom_rules": "",
+    "model": DEFAULT_MODEL_LABEL,
 }
 
 

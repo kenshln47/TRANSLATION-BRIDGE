@@ -40,7 +40,7 @@ class SetupScreen:
         ).pack(pady=(0, 2))
 
         ctk.CTkLabel(
-            self.frame, text="Multi-language • Grok 4.1 Fast",
+            self.frame, text="Multi-language • Fast AI translation",
             font=ctk.CTkFont(size=11), text_color=C.TEXT_DIM,
         ).pack(pady=(0, 20))
 

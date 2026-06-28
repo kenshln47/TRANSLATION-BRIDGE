@@ -22,8 +22,9 @@ from .config import (
 )
 from .constants import (
     DEFAULT_HOTKEY, MODE_COPY, MODE_PASTE, MODE_SEND,
-    WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_OPACITY, MAX_HISTORY_ITEMS,
+    WINDOW_WIDTH, WINDOW_HEIGHT, MAX_HISTORY_ITEMS,
     DEFAULT_SOURCE, DEFAULT_TARGET,
+    MODEL_OPTIONS, OPENROUTER_MODEL, DEFAULT_MODEL_LABEL,
 )
 from .translator import Translator
 from .hotkey import NativeHotkey
@@ -61,14 +62,24 @@ class MONITORINFO(ctypes.Structure):
                 ("rcWork", RECT), ("dwFlags", ctypes.c_ulong)]
 
 
-def _get_monitor_from_point(x, y):
-    pt = POINT(x, y)
-    hmon = user32.MonitorFromPoint(pt, 2)  # MONITOR_DEFAULTTONEAREST
+def _monitor_rect_from_handle(hmon):
     if hmon:
         mi = MONITORINFO()
         mi.cbSize = ctypes.sizeof(MONITORINFO)
         if user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
             return mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom
+    return None
+
+
+def _get_monitor_from_point(x, y):
+    pt = POINT(x, y)
+    return _monitor_rect_from_handle(user32.MonitorFromPoint(pt, 2))  # DEFAULTTONEAREST
+
+
+def _get_monitor_from_window(hwnd):
+    """Monitor rect of the window the user was just in (the game)."""
+    if hwnd and user32.IsWindow(hwnd):
+        return _monitor_rect_from_handle(user32.MonitorFromWindow(hwnd, 2))  # DEFAULTTONEAREST
     return None
 
 
@@ -83,6 +94,9 @@ class App(ctk.CTk):
         self.translator = Translator()
         self.is_busy = False
         self.cfg = load_config()
+        self.translator.set_model(
+            MODEL_OPTIONS.get(self.cfg.get("model", DEFAULT_MODEL_LABEL), OPENROUTER_MODEL)
+        )
         self.send_mode = ctk.StringVar(value=self.cfg.get("mode", MODE_SEND))
         self._timer_id = None
         self._last_hwnd = None
@@ -130,7 +144,8 @@ class App(ctk.CTk):
 
     def _show_window(self):
         self.deiconify()
-        self.attributes("-topmost", True)
+        self.lift()
+        self.focus_force()
 
     # ── WINDOW ──
 
@@ -138,8 +153,11 @@ class App(ctk.CTk):
         self.title("Translation Bridge")
         self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         self.resizable(False, False)
-        self.attributes("-topmost", True)
-        self.attributes("-alpha", WINDOW_OPACITY)
+        # NOTE: the main window is deliberately NOT topmost and NOT layered (-alpha).
+        # A persistent always-on-top, semi-transparent window forces fullscreen games
+        # out of exclusive mode into composited rendering, which drops FPS. The only
+        # surface that goes over the game is the transient quick-popup (Ctrl+Shift+T),
+        # which destroys itself the moment you're done.
         self.configure(fg_color=C.BG)
 
         if HAS_PIL and os.path.exists(LOGO_FILE):
@@ -196,18 +214,21 @@ class App(ctk.CTk):
         p.configure(fg_color=C.BG_CARD)
         self._hotkey_popup = p
 
-        # Position on the monitor where the mouse is
+        # Always appear at the SAME predictable spot — bottom-center of the monitor
+        # the game is on — so it doesn't matter where the mouse is. Falls back to the
+        # mouse's monitor, then the primary monitor.
         p.update_idletasks()
-        mx = self.winfo_pointerx()
-        my = self.winfo_pointery()
-        mon_rect = _get_monitor_from_point(mx, my)
+        mon_rect = (
+            _get_monitor_from_window(self._last_hwnd)
+            or _get_monitor_from_point(self.winfo_pointerx(), self.winfo_pointery())
+        )
         if mon_rect:
             m_left, m_top, m_right, m_bottom = mon_rect
             x = m_left + ((m_right - m_left) - 420) // 2
-            y = m_bottom - 120
+            y = m_bottom - 140
         else:
-            x = mx - 210
-            y = my - 100
+            x = (self.winfo_screenwidth() - 420) // 2
+            y = self.winfo_screenheight() - 140
         p.geometry(f"+{x}+{y}")
 
         # Border effect
@@ -673,7 +694,7 @@ class App(ctk.CTk):
 
     def _restore(self):
         self.deiconify()
-        self.attributes("-topmost", True)
+        self.lift()
         m = self.send_mode.get()
         self._status("✅ Sent!" if m == MODE_SEND else "✅ Pasted!", C.SUCCESS)
         self.inp.delete(0, "end")
@@ -711,7 +732,7 @@ class App(ctk.CTk):
 
     def _manual_done(self):
         self.deiconify()
-        self.attributes("-topmost", True)
+        self.lift()
         self.send_btn.configure(state="normal", text="📋  Copy & Paste to Chat")
         self._status("✅ Done!", C.SUCCESS)
         self.inp.delete(0, "end")

@@ -14,6 +14,7 @@ from ..config import load_api_key, save_api_key, save_config, ICON_FILE
 from ..constants import (
     GAME_LIST, TONE_LIST, ARABIC_TO_ENGLISH,
     SOURCE_LIST, TARGET_LIST, DEFAULT_SOURCE, DEFAULT_TARGET,
+    MODEL_LABELS, MODEL_OPTIONS, OPENROUTER_MODEL, DEFAULT_MODEL_LABEL,
 )
 from ..hotkey import record_hotkey_native
 
@@ -30,7 +31,7 @@ class SettingsDialog:
     def show(self):
         d = ctk.CTkToplevel(self._app)
         d.title("Settings")
-        d.geometry("380x780")
+        d.geometry("380x840")
         d.resizable(False, False)
         d.attributes("-topmost", True)
         d.grab_set()
@@ -46,7 +47,7 @@ class SettingsDialog:
 
         d.update_idletasks()
         x = (d.winfo_screenwidth() - 380) // 2
-        y = (d.winfo_screenheight() - 780) // 2
+        y = max(0, (d.winfo_screenheight() - 840) // 2)
         d.geometry(f"+{x}+{y}")
 
         ctk.CTkLabel(
@@ -78,6 +79,19 @@ class SettingsDialog:
             fg_color=C.BG_CARD, hover_color=C.PRIMARY, text_color=C.ACCENT,
             command=self._paste_key,
         ).pack(fill="x", padx=16, pady=(0, 10))
+
+        # ── Model ──
+        self._model_var = ctk.StringVar(
+            value=self._app.cfg.get("model", DEFAULT_MODEL_LABEL)
+        )
+        ctk.CTkLabel(d, text="MODEL",
+                      font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+                      text_color=C.TEXT).pack(anchor="w", padx=16)
+
+        ctk.CTkOptionMenu(
+            d, variable=self._model_var, values=MODEL_LABELS,
+            font=ctk.CTkFont(size=11), fg_color=C.BG_INPUT, button_color=C.PRIMARY,
+        ).pack(fill="x", padx=16, pady=(2, 10))
 
         # ── Hotkey ──
         ctk.CTkLabel(d, text="GLOBAL HOTKEY",
@@ -262,6 +276,12 @@ class SettingsDialog:
             save_api_key(k)
             self._app.translator._init(k)
             self._app._check_api()
+
+        # Apply selected model (resolve label → OpenRouter slug)
+        self._app.cfg["model"] = self._model_var.get()
+        self._app.translator.set_model(
+            MODEL_OPTIONS.get(self._model_var.get(), OPENROUTER_MODEL)
+        )
 
         hk = self._pending_hotkey.strip().lower()
         if hk:

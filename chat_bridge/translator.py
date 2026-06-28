@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 class Translator:
     """Handles API communication with OpenRouter for translation."""
 
+    # grok-4.1-fast "thinks" before answering by default, which adds seconds of
+    # latency. We ask OpenRouter to turn reasoning off for instant short replies.
+    # If a provider ever rejects the param, this flips to False and we retry plain.
+    _reasoning_ok = True
+
     def __init__(self, api_key: str = ""):
         self.api_key = api_key
         self.model = OPENROUTER_MODEL
@@ -30,8 +35,15 @@ class Translator:
     def _init(self, key: str):
         self.api_key = key
         http_client = httpx.Client(
-            timeout=httpx.Timeout(10.0, connect=3.0),
-            limits=httpx.Limits(max_connections=5, max_keepalive_connections=2),
+            timeout=httpx.Timeout(15.0, connect=5.0),
+            # keepalive_expiry keeps the TLS connection warm between translations.
+            # Default is 5s — far shorter than the gap between in-game messages,
+            # so every translation used to pay a fresh handshake (~150-500ms).
+            limits=httpx.Limits(
+                max_connections=5,
+                max_keepalive_connections=5,
+                keepalive_expiry=600.0,
+            ),
         )
         self.client = OpenAI(
             base_url=OPENROUTER_BASE_URL,
@@ -39,6 +51,37 @@ class Translator:
             http_client=http_client,
         )
         logger.info(f"Translator initialized with model: {self.model}")
+
+    def _create(self, messages, stream: bool):
+        """Create a completion, disabling model reasoning for low latency."""
+        kwargs = dict(
+            model=self.model,
+            messages=messages,
+            max_tokens=80,
+            temperature=0.1,
+            stream=stream,
+        )
+        if Translator._reasoning_ok:
+            # OpenRouter-specific: turn off chain-of-thought for speed.
+            kwargs["extra_body"] = {"reasoning": {"enabled": False}}
+        try:
+            return self.client.chat.completions.create(**kwargs)
+        except Exception as e:
+            # Some providers mandate reasoning and 400 on enabled:false — retry once.
+            if Translator._reasoning_ok and "reasoning" in str(e).lower():
+                logger.warning("Reasoning-off param rejected; retrying without it.")
+                Translator._reasoning_ok = False
+                kwargs.pop("extra_body", None)
+                return self.client.chat.completions.create(**kwargs)
+            raise
+
+    def set_model(self, model_slug: str):
+        """Switch the active OpenRouter model (slug, e.g. 'x-ai/grok-4.1-fast')."""
+        if model_slug and model_slug != self.model:
+            self.model = model_slug
+            # A different provider may have different reasoning support; re-allow.
+            Translator._reasoning_ok = True
+            logger.info(f"Model switched to: {model_slug}")
 
     def ready(self) -> bool:
         return bool(self.api_key and self.client)
@@ -48,11 +91,7 @@ class Translator:
         if not self.ready():
             return False, "No API key"
         try:
-            self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": "Say OK"}],
-                max_tokens=3, temperature=0,
-            )
+            self._create([{"role": "user", "content": "Say OK"}], stream=False)
             logger.info("API connection test: OK")
             return True, "Connected"
         except Exception as e:
@@ -102,13 +141,12 @@ class Translator:
                 sys_prompt += f"\n\nUSER CUSTOM RULES (OVERRIDE ALL OTHERS):\n{custom_rules.strip()}"
 
             t0 = time.time()
-            chunks = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            chunks = self._create(
+                [
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": text.strip()},
                 ],
-                max_tokens=80, temperature=0.1, stream=True,
+                stream=True,
             )
 
             full = ""

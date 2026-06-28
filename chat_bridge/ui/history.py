@@ -3,9 +3,12 @@ Translation Bridge — Translation History Panel
 """
 
 import logging
+import os
+
 import customtkinter as ctk
 
 from .theme import C
+from ..config import ICON_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,14 @@ class HistoryPanel:
         w.attributes("-topmost", True)
         w.configure(fg_color=C.BG)
         self._window = w
+
+        # Use the app icon instead of the default Tk icon. CTkToplevel sets its own
+        # icon on creation, so we override it slightly later via after().
+        try:
+            if os.path.exists(ICON_FILE):
+                w.after(200, lambda: w.iconbitmap(ICON_FILE))
+        except Exception as e:
+            logger.warning(f"Failed to set history window icon: {e}")
 
         # Center on screen
         w.update_idletasks()
