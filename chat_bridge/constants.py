@@ -30,6 +30,9 @@ MODEL_OPTIONS = {
     "⚡ Gemini 2.5 Flash-Lite — fastest & cheapest (default)": "google/gemini-2.5-flash-lite",
     "🐉 Qwen 3.6 Flash — stronger Arabic / edgier": "qwen/qwen3.6-flash",
     "🔥 Grok 4.20 — rawest slang / least filtered": "x-ai/grok-4.20",
+    # Free tier: no token cost, but shared capacity — expect 2-4s replies and
+    # occasional rate limits. Benchmarked as the most reliable free model.
+    "🆓 Nemotron 550B — FREE (slower, may rate-limit)": "nvidia/nemotron-3-ultra-550b-a55b:free",
 }
 MODEL_LABELS = list(MODEL_OPTIONS.keys())
 DEFAULT_MODEL_LABEL = MODEL_LABELS[0]
@@ -119,6 +122,11 @@ SOUND LIKE A REAL PLAYER, NOT AN AI:
 ARABIC NOTES:
 - Gender from the verb: أنتِ/شفتيه = female (drop "bro/dude"); أنتَ/شفته = male/neutral.
 - وش=what, ليش=why, خلاص=done, يب/إي=yeah, وين=where. حبيبي(to a guy)=bro/homie. حبيبتي(to a girl)=babe. يلعن…=carry the rage, never literal.
+
+SESSION MEMORY:
+- Earlier turns in this conversation are the SAME game session: each user turn is something the player already said, each assistant turn is how it was translated.
+- Use them to resolve references (هو/هي/ذاك/نفسه = whoever was mentioned before), keep names and terms consistent, and follow the flow of the conversation.
+- Translate ONLY the newest message. Never re-translate, summarize, or reply to earlier turns.
 
 EDGE CASES:
 - Insults/profanity: keep the SAME intensity, do not sanitize.
@@ -270,6 +278,18 @@ ARABIC_TO_ENGLISH = {
     'ِ':'a', 'ٍ':'s', 'لأ':'g', 'أ':'h', 'ـ':'j', '،':'k',
     '~':'z', 'ْ':'x', 'لآ':'b', 'آ':'n', '\u2019':'m'
 }
+
+# ─────────────────────────────────────────────────────────────
+# SESSION CONTEXT (in-game conversation memory)
+# ─────────────────────────────────────────────────────────────
+# Recent messages are sent back to the model as prior turns so it understands
+# references across messages within the same game session. Input tokens are the
+# cheap side ($0.10/M on the default model), so 6 short pairs costs ~nothing,
+# but we still cap count and length so cost can never creep up.
+
+CONTEXT_MAX_EXCHANGES = 6    # how many recent (source, translation) pairs to send
+CONTEXT_IDLE_MINUTES = 10    # silence longer than this = new game session, reset
+CONTEXT_MAX_CHARS = 150      # cap per remembered message
 
 # ─────────────────────────────────────────────────────────────
 # HISTORY
