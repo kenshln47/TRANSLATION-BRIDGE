@@ -1,6 +1,6 @@
 """
-Translation Bridge v8.0
-Multi-language translator via OpenRouter (Grok 4.1 Fast)
+Translation Bridge v8.2
+Multi-language translator via OpenRouter (selectable model)
 
 Main Application — ties together all modules.
 """
@@ -25,6 +25,7 @@ from .constants import (
     WINDOW_WIDTH, WINDOW_HEIGHT, MAX_HISTORY_ITEMS,
     DEFAULT_SOURCE, DEFAULT_TARGET,
     MODEL_OPTIONS, OPENROUTER_MODEL, DEFAULT_MODEL_LABEL,
+    CONTEXT_MAX_EXCHANGES, CONTEXT_IDLE_MINUTES, CONTEXT_MAX_CHARS,
 )
 from .translator import Translator
 from .hotkey import NativeHotkey
@@ -104,6 +105,9 @@ class App(ctk.CTk):
         self._hotkey_popup = None
         self._history = load_history()
         self._history_panel = HistoryPanel(self)
+        # In-game session memory: recent (source, translation) pairs sent as context
+        self._session_pairs = []
+        self._session_ts = 0.0
 
         # Hotkey & Tray
         self._hotkey = NativeHotkey()
@@ -205,6 +209,9 @@ class App(ctk.CTk):
             self._hotkey_popup = None
             return
 
+        # Warm the API connection while the user types (zero-token, best-effort)
+        threading.Thread(target=self.translator.warm, daemon=True).start()
+
         p = ctk.CTkToplevel(self)
         p.title("Quick Translate")
         p.geometry("420x60")
@@ -281,15 +288,21 @@ class App(ctk.CTk):
                 Toast.show(self, f"Translation failed: {msg}", style="error")
 
             original_text = txt
+            # Snapshot session context on the main thread (Tk event handler)
+            ctx = self._session_context()
+
+            def _finish(result):
+                # Main thread: clipboard, history file I/O, session memory, then paste
+                self._safe_copy(result)
+                self._history = add_history_entry(
+                    original_text, result, self._history, MAX_HISTORY_ITEMS
+                )
+                self._session_add(original_text, result)
+                _paste_and_close(result)
 
             def _do():
                 def on_done(result):
-                    self._safe_copy(result)
-                    # Save to history
-                    self._history = add_history_entry(
-                        original_text, result, self._history, MAX_HISTORY_ITEMS
-                    )
-                    self.after(0, _paste_and_close, result)
+                    self.after(0, _finish, result)
 
                 def on_error(msg):
                     self.after(0, lambda: _handle_error(msg))
@@ -301,6 +314,7 @@ class App(ctk.CTk):
                     ai_tone=self.cfg.get("tone", "Gamer (Default)"),
                     source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
                     target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
+                    context=ctx,
                     on_done=on_done, on_error=on_error
                 )
 
@@ -323,12 +337,14 @@ class App(ctk.CTk):
                 return
 
             def _do_paste_send():
-                time.sleep(0.1)
+                # Trimmed but not removed: the game needs a beat to regain focus
+                # after the popup destroys itself, or the paste lands nowhere.
+                time.sleep(0.06)
                 self._release_all_modifiers()
-                time.sleep(0.05)
+                time.sleep(0.03)
                 self._kb_ctrl_v()
                 if mode == MODE_SEND:
-                    time.sleep(0.08)
+                    time.sleep(0.06)
                     self._kb_enter()
                 # Show toast after paste/send
                 self.after(0, lambda: Toast.show(self, "Sent ✅", style="success"))
@@ -565,7 +581,8 @@ class App(ctk.CTk):
         self._tick()
 
         original_text = text
-        threading.Thread(target=self._do_tr, args=(text, original_text), daemon=True).start()
+        ctx = self._session_context()
+        threading.Thread(target=self._do_tr, args=(text, original_text, ctx), daemon=True).start()
 
     def _tick(self):
         if not self.is_busy:
@@ -578,7 +595,7 @@ class App(ctk.CTk):
             self.after_cancel(self._timer_id)
             self._timer_id = None
 
-    def _do_tr(self, text, original_text):
+    def _do_tr(self, text, original_text, ctx=None):
         self.translator.stream(
             text,
             custom_rules=self.cfg.get("custom_rules", ""),
@@ -586,6 +603,7 @@ class App(ctk.CTk):
             ai_tone=self.cfg.get("tone", "Gamer (Default)"),
             source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
             target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
+            context=ctx,
             on_token=lambda t: self.after(0, self._add_tok, t),
             on_done=lambda r: self.after(0, self._done, r, original_text),
             on_error=lambda e: self.after(0, self._fail, e),
@@ -611,11 +629,12 @@ class App(ctk.CTk):
         self._safe_copy(result)
         self.send_btn.configure(state="normal")
 
-        # Save to history
+        # Save to history + session memory
         if original_text:
             self._history = add_history_entry(
                 original_text, result, self._history, MAX_HISTORY_ITEMS
             )
+            self._session_add(original_text, result)
 
         mode = self.send_mode.get()
         if mode == MODE_COPY:
@@ -739,6 +758,28 @@ class App(ctk.CTk):
         self.cp_lbl.configure(text="")
         self.send_btn.configure(state="disabled")
         self.inp.focus_set()
+
+    # ── SESSION CONTEXT ──
+
+    def _session_context(self):
+        """Recent exchanges from the current game session (main thread only).
+        Silence longer than CONTEXT_IDLE_MINUTES means the game/session changed,
+        so we start fresh instead of dragging in stale context."""
+        if self._session_pairs and (time.time() - self._session_ts) > CONTEXT_IDLE_MINUTES * 60:
+            logger.info("Session idle timeout — context reset.")
+            self._session_pairs = []
+        return list(self._session_pairs)
+
+    def _session_add(self, src: str, dst: str):
+        """Remember an exchange for context (main thread only). Caps keep cost flat."""
+        self._session_pairs.append((src[:CONTEXT_MAX_CHARS], dst[:CONTEXT_MAX_CHARS]))
+        self._session_pairs = self._session_pairs[-CONTEXT_MAX_EXCHANGES:]
+        self._session_ts = time.time()
+
+    def reset_session(self):
+        """Drop session context (e.g. after language/model change in settings)."""
+        self._session_pairs = []
+        self._session_ts = 0.0
 
     # ── HELPERS ──
 

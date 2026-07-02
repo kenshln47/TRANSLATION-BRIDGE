@@ -293,6 +293,10 @@ class SettingsDialog:
         self._app.cfg["custom_rules"] = self._rules_box.get("1.0", "end").strip()
         save_config(self._app.cfg)
 
+        # Language/model may have changed — old session context would mislead
+        # the model (turns in the wrong language), so start fresh.
+        self._app.reset_session()
+
         # Update main UI subtitle to reflect language
         if hasattr(self._app, '_lang_label'):
             self._app._lang_label.configure(

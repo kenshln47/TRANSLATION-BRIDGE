@@ -34,7 +34,7 @@ class Translator:
 
     def _init(self, key: str):
         self.api_key = key
-        http_client = httpx.Client(
+        self._http = http_client = httpx.Client(
             timeout=httpx.Timeout(15.0, connect=5.0),
             # keepalive_expiry keeps the TLS connection warm between translations.
             # Default is 5s — far shorter than the gap between in-game messages,
@@ -52,18 +52,22 @@ class Translator:
         )
         logger.info(f"Translator initialized with model: {self.model}")
 
-    def _create(self, messages, stream: bool):
+    def _create(self, messages, stream: bool, max_tokens: int = 80):
         """Create a completion, disabling model reasoning for low latency."""
         kwargs = dict(
             model=self.model,
             messages=messages,
-            max_tokens=80,
+            max_tokens=max_tokens,
             temperature=0.1,
             stream=stream,
         )
+        # OpenRouter-specific knobs: route to the lowest-latency provider (cuts
+        # the random 5-9s spikes from congested providers) and disable
+        # chain-of-thought reasoning for instant short replies.
+        extra = {"provider": {"sort": "latency"}}
         if Translator._reasoning_ok:
-            # OpenRouter-specific: turn off chain-of-thought for speed.
-            kwargs["extra_body"] = {"reasoning": {"enabled": False}}
+            extra["reasoning"] = {"enabled": False}
+        kwargs["extra_body"] = extra
         try:
             return self.client.chat.completions.create(**kwargs)
         except Exception as e:
@@ -71,9 +75,25 @@ class Translator:
             if Translator._reasoning_ok and "reasoning" in str(e).lower():
                 logger.warning("Reasoning-off param rejected; retrying without it.")
                 Translator._reasoning_ok = False
-                kwargs.pop("extra_body", None)
+                extra.pop("reasoning", None)
                 return self.client.chat.completions.create(**kwargs)
             raise
+
+    def warm(self):
+        """Pre-open the TCP/TLS connection with a zero-token GET.
+        Called when the quick popup opens: while the user is typing, the
+        handshake (~150-500ms) happens in parallel, so the actual translation
+        starts on a warm connection. Costs no tokens at all."""
+        if not self.client:
+            return
+        try:
+            self._http.get(
+                f"{OPENROUTER_BASE_URL}/key",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=3.0,
+            )
+        except Exception:
+            pass  # best-effort; translation works either way
 
     def set_model(self, model_slug: str):
         """Switch the active OpenRouter model (slug, e.g. 'x-ai/grok-4.1-fast')."""
@@ -91,7 +111,7 @@ class Translator:
         if not self.ready():
             return False, "No API key"
         try:
-            self._create([{"role": "user", "content": "Say OK"}], stream=False)
+            self._create([{"role": "user", "content": "Say OK"}], stream=False, max_tokens=3)
             logger.info("API connection test: OK")
             return True, "Connected"
         except Exception as e:
@@ -106,8 +126,13 @@ class Translator:
     def stream(self, text: str, custom_rules: str = "", game_mode: str = "General",
                ai_tone: str = "Gamer (Default)",
                source_key: str = "", target_key: str = "",
+               context=None,
                on_token=None, on_done=None, on_error=None):
-        """Stream a translation request. Callbacks are called from the caller's thread."""
+        """Stream a translation request. Callbacks are called from the caller's thread.
+
+        context: list of (source_text, translated_text) pairs from the current game
+        session, sent as prior turns so the model resolves cross-message references.
+        """
         if not text or not text.strip():
             if on_error:
                 on_error("Empty")
@@ -140,14 +165,15 @@ class Translator:
             if custom_rules and custom_rules.strip():
                 sys_prompt += f"\n\nUSER CUSTOM RULES (OVERRIDE ALL OTHERS):\n{custom_rules.strip()}"
 
+            # Prior turns from this game session (cheap input tokens, big quality win)
+            messages = [{"role": "system", "content": sys_prompt}]
+            for src, dst in (context or []):
+                messages.append({"role": "user", "content": src})
+                messages.append({"role": "assistant", "content": dst})
+            messages.append({"role": "user", "content": text.strip()})
+
             t0 = time.time()
-            chunks = self._create(
-                [
-                    {"role": "system", "content": sys_prompt},
-                    {"role": "user", "content": text.strip()},
-                ],
-                stream=True,
-            )
+            chunks = self._create(messages, stream=True)
 
             full = ""
             for c in chunks:

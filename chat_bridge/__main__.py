@@ -1,6 +1,6 @@
 """
-Translation Bridge v8.0 — Entry Point
-Multi-language translator via OpenRouter (Grok 4.1 Fast)
+Translation Bridge v8.2 — Entry Point
+Multi-language translator via OpenRouter (selectable model)
 
 Run with: python -m chat_bridge
 """
