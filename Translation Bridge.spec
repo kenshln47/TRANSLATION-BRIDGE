@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('assets/logo.png', 'assets')]
 binaries = []
-hiddenimports = ['PIL', 'chat_bridge', 'chat_bridge.app', 'chat_bridge.translator', 'chat_bridge.config', 'chat_bridge.hotkey', 'chat_bridge.tray', 'chat_bridge.constants']
+hiddenimports = ['PIL', 'chat_bridge']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('darkdetect')

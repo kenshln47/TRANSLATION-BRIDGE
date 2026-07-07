@@ -6,7 +6,7 @@ import logging
 import time
 
 import httpx
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 
 from .constants import (
     OPENROUTER_BASE_URL, OPENROUTER_MODEL,
@@ -20,20 +20,30 @@ logger = logging.getLogger(__name__)
 class Translator:
     """Handles API communication with OpenRouter for translation."""
 
-    # grok-4.1-fast "thinks" before answering by default, which adds seconds of
-    # latency. We ask OpenRouter to turn reasoning off for instant short replies.
-    # If a provider ever rejects the param, this flips to False and we retry plain.
-    _reasoning_ok = True
-
     def __init__(self, api_key: str = ""):
         self.api_key = api_key
         self.model = OPENROUTER_MODEL
         self.client = None
+        self._http = None
+        # Some models "think" before answering by default, adding seconds of
+        # latency, so we ask OpenRouter to turn reasoning off. If a provider
+        # rejects the param (400), this flips to False and we retry without it.
+        # Instance-level and reset on model switch, so one provider's quirk
+        # can't permanently disable the optimization process-wide.
+        self._reasoning_ok = True
         if api_key:
             self._init(api_key)
 
     def _init(self, key: str):
         self.api_key = key
+        # Re-initialization (e.g. saving a new key in Settings) must not leak
+        # the previous client's keepalive TLS connections.
+        if self._http is not None:
+            try:
+                self._http.close()
+            except Exception:
+                pass
+        self._reasoning_ok = True
         self._http = http_client = httpx.Client(
             timeout=httpx.Timeout(15.0, connect=5.0),
             # keepalive_expiry keeps the TLS connection warm between translations.
@@ -65,16 +75,18 @@ class Translator:
         # the random 5-9s spikes from congested providers) and disable
         # chain-of-thought reasoning for instant short replies.
         extra = {"provider": {"sort": "latency"}}
-        if Translator._reasoning_ok:
+        if self._reasoning_ok:
             extra["reasoning"] = {"enabled": False}
         kwargs["extra_body"] = extra
         try:
             return self.client.chat.completions.create(**kwargs)
-        except Exception as e:
-            # Some providers mandate reasoning and 400 on enabled:false — retry once.
-            if Translator._reasoning_ok and "reasoning" in str(e).lower():
+        except BadRequestError as e:
+            # Only a 400 mentioning the reasoning param means the provider
+            # mandates reasoning — anything else (429s, quota errors that
+            # happen to contain the word) must not disable the optimization.
+            if self._reasoning_ok and "reasoning" in str(e).lower():
                 logger.warning("Reasoning-off param rejected; retrying without it.")
-                Translator._reasoning_ok = False
+                self._reasoning_ok = False
                 extra.pop("reasoning", None)
                 return self.client.chat.completions.create(**kwargs)
             raise
@@ -96,11 +108,11 @@ class Translator:
             pass  # best-effort; translation works either way
 
     def set_model(self, model_slug: str):
-        """Switch the active OpenRouter model (slug, e.g. 'x-ai/grok-4.1-fast')."""
+        """Switch the active OpenRouter model (slug, e.g. 'google/gemini-2.5-flash-lite')."""
         if model_slug and model_slug != self.model:
             self.model = model_slug
             # A different provider may have different reasoning support; re-allow.
-            Translator._reasoning_ok = True
+            self._reasoning_ok = True
             logger.info(f"Model switched to: {model_slug}")
 
     def ready(self) -> bool:
@@ -126,12 +138,14 @@ class Translator:
     def stream(self, text: str, custom_rules: str = "", game_mode: str = "General",
                ai_tone: str = "Gamer (Default)",
                source_key: str = "", target_key: str = "",
-               context=None,
+               context=None, cancel=None,
                on_token=None, on_done=None, on_error=None):
         """Stream a translation request. Callbacks are called from the caller's thread.
 
         context: list of (source_text, translated_text) pairs from the current game
         session, sent as prior turns so the model resolves cross-message references.
+        cancel: optional threading.Event — when set, the request is aborted and NO
+        callbacks fire (the user changed their mind; nothing should be pasted).
         """
         if not text or not text.strip():
             if on_error:
@@ -140,6 +154,8 @@ class Translator:
         if not self.ready():
             if on_error:
                 on_error("No API key")
+            return
+        if cancel is not None and cancel.is_set():
             return
 
         try:
@@ -177,11 +193,21 @@ class Translator:
 
             full = ""
             for c in chunks:
+                if cancel is not None and cancel.is_set():
+                    try:
+                        chunks.close()  # abort the HTTP stream, stop paying for tokens
+                    except Exception:
+                        pass
+                    logger.info("Translation cancelled by user.")
+                    return
                 if c.choices and c.choices[0].delta.content:
                     t = c.choices[0].delta.content
                     full += t
                     if on_token:
                         on_token(t)
+
+            if cancel is not None and cancel.is_set():
+                return
 
             # Clean up the result — only strip newlines, not parentheses
             result = full.strip().split("\n")[0].strip()
@@ -196,6 +222,8 @@ class Translator:
                 on_done(result or "[Empty]")
 
         except Exception as e:
+            if cancel is not None and cancel.is_set():
+                return  # aborting a cancelled stream can raise; stay silent
             err = str(e)
             logger.error(f"Translation failed: {err[:100]}")
             if "401" in err:

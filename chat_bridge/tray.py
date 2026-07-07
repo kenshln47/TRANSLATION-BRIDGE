@@ -32,9 +32,20 @@ class TrayManager:
         return self._icon is not None
 
     def show(self):
-        """Show the tray icon in a background thread."""
+        """Show the tray icon (constructed here, run in a background thread).
+
+        The Icon object is built synchronously so self._icon is set before
+        show() returns — otherwise a stop() arriving while the worker was still
+        loading the image would no-op and leave a ghost icon running.
+        """
         if self._icon:
             return
+        icon_image = self._load_icon()
+        menu = pystray.Menu(
+            pystray.MenuItem('Show', self._handle_restore, default=True),
+            pystray.MenuItem('Quit', self._handle_quit),
+        )
+        self._icon = pystray.Icon("TranslationBridge", icon_image, "Translation Bridge", menu)
         threading.Thread(target=self._run, daemon=True).start()
 
     def stop(self):
@@ -47,14 +58,19 @@ class TrayManager:
             self._icon = None
 
     def _run(self):
-        icon_image = self._load_icon()
-        menu = pystray.Menu(
-            pystray.MenuItem('Show', self._handle_restore, default=True),
-            pystray.MenuItem('Quit', self._handle_quit),
-        )
-        self._icon = pystray.Icon("TranslationBridge", icon_image, "Translation Bridge", menu)
         logger.info("System tray icon started.")
-        self._icon.run()
+        try:
+            self._icon.run()
+        except Exception as e:
+            # If the tray dies while the main window is withdrawn, the app has
+            # no visible surface left — bring the window back instead of
+            # stranding the user with a hidden process.
+            logger.error(f"Tray icon crashed: {e}")
+            self._icon = None
+            try:
+                self._on_restore()
+            except Exception:
+                pass
 
     def _handle_restore(self, icon, item=None):
         self.stop()

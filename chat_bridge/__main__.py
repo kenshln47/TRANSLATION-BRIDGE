@@ -1,5 +1,5 @@
 """
-Translation Bridge v8.2 — Entry Point
+Translation Bridge v8.4 — Entry Point
 Multi-language translator via OpenRouter (selectable model)
 
 Run with: python -m chat_bridge

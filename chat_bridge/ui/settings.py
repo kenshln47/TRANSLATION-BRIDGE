@@ -3,14 +3,17 @@ Translation Bridge — Settings Dialog
 """
 
 import logging
-import os
 import threading
 
 import customtkinter as ctk
 import pyperclip
 
+from . import apply_app_icon
 from .theme import C
-from ..config import load_api_key, save_api_key, save_config, ICON_FILE
+from ..config import (
+    load_api_key, save_api_key, save_config,
+    is_autostart_enabled, set_autostart,
+)
 from ..constants import (
     GAME_LIST, TONE_LIST, ARABIC_TO_ENGLISH,
     SOURCE_LIST, TARGET_LIST, DEFAULT_SOURCE, DEFAULT_TARGET,
@@ -31,7 +34,6 @@ class SettingsDialog:
     def show(self):
         d = ctk.CTkToplevel(self._app)
         d.title("Settings")
-        d.geometry("380x840")
         d.resizable(False, False)
         d.attributes("-topmost", True)
         d.grab_set()
@@ -39,22 +41,33 @@ class SettingsDialog:
         self._dialog = d
         d.protocol("WM_DELETE_WINDOW", self._close)
 
-        try:
-            if os.path.exists(ICON_FILE):
-                d.after(200, lambda: d.iconbitmap(ICON_FILE))
-        except Exception as e:
-            logger.warning(f"Failed to set settings icon: {e}")
+        apply_app_icon(d)
 
+        # Fit small screens: cap the height and let the body scroll instead of
+        # pushing SAVE below the edge of 768p laptop displays.
         d.update_idletasks()
-        x = (d.winfo_screenwidth() - 380) // 2
-        y = max(0, (d.winfo_screenheight() - 840) // 2)
-        d.geometry(f"+{x}+{y}")
+        scr_w, scr_h = d.winfo_screenwidth(), d.winfo_screenheight()
+        w, h = 400, min(860, scr_h - 80)
+        d.geometry(f"{w}x{h}+{(scr_w - w) // 2}+{max(0, (scr_h - h) // 2)}")
 
         ctk.CTkLabel(
             d, text="SETTINGS",
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             text_color=C.ACCENT,
-        ).pack(padx=16, pady=(12, 10))
+        ).pack(padx=16, pady=(12, 6))
+
+        # Buttons pinned to the bottom so they are always reachable;
+        # everything else lives in a scrollable body.
+        btn_row = ctk.CTkFrame(d, fg_color="transparent")
+        btn_row.pack(side="bottom", fill="x", padx=16, pady=(6, 12))
+
+        body = ctk.CTkScrollableFrame(
+            d, fg_color="transparent",
+            scrollbar_button_color=C.BORDER,
+            scrollbar_button_hover_color=C.PRIMARY,
+        )
+        body.pack(fill="both", expand=True, padx=(4, 0))
+        d = body  # sections below attach to the scrollable body
 
         # ── API Key ──
         ctk.CTkLabel(d, text="API KEY",
@@ -200,23 +213,37 @@ class SettingsDialog:
         if saved_rules:
             self._rules_box.insert("1.0", saved_rules)
 
-        # ── Buttons ──
-        row = ctk.CTkFrame(d, fg_color="transparent")
-        row.pack(fill="x", padx=16)
+        # ── Start with Windows ──
+        self._autostart_var = ctk.BooleanVar(value=is_autostart_enabled())
+        auto_row = ctk.CTkFrame(d, fg_color="transparent")
+        auto_row.pack(fill="x", padx=16, pady=(0, 8))
 
+        ctk.CTkLabel(auto_row, text="START WITH WINDOWS",
+                      font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+                      text_color=C.TEXT).pack(side="left")
+
+        ctk.CTkSwitch(
+            auto_row, text="", variable=self._autostart_var,
+            onvalue=True, offvalue=False, width=48,
+            progress_color=C.PRIMARY,
+        ).pack(side="right")
+
+        ctk.CTkLabel(d, text="يفتح تلقائياً مع الويندوز ويقعد بالخلفية جاهز",
+                      font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
+                      ).pack(anchor="w", padx=16, pady=(0, 8))
+
+        # ── Buttons (pinned row created before the scrollable body) ──
         ctk.CTkButton(
-            row, text="SAVE", width=150, height=36,
+            btn_row, text="SAVE", width=150, height=36,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             fg_color=C.PRIMARY, hover_color=C.PRIMARY_H, command=self._save,
         ).pack(side="left", expand=True, padx=(0, 4))
 
         ctk.CTkButton(
-            row, text="CANCEL", width=150, height=36,
+            btn_row, text="CANCEL", width=150, height=36,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             fg_color=C.BG_CARD, hover_color=C.BORDER, command=self._close,
         ).pack(side="right", expand=True, padx=(4, 0))
-
-        d.protocol("WM_DELETE_WINDOW", self._close)
 
     def _paste_key(self):
         try:
@@ -251,10 +278,7 @@ class SettingsDialog:
         self._hk_btn.configure(text=self._pending_hotkey.upper(), text_color=C.ACCENT)
         self._rec_btn.configure(state="normal")
         # Re-register hotkey immediately so it's not lost during settings
-        self._app._hotkey.register(
-            self._pending_hotkey,
-            lambda: self._app.after(0, self._app._show_quick_popup)
-        )
+        self._app._register_hotkey(self._pending_hotkey)
 
     def _import_profile(self):
         file_path = ctk.filedialog.askopenfilename(
@@ -272,7 +296,10 @@ class SettingsDialog:
 
     def _save(self):
         k = self._key_entry.get().strip()
-        if k:
+        # The entry is pre-filled with the saved key, so only re-init when it
+        # actually changed — otherwise every SAVE would rebuild the HTTP client
+        # (leaking the warm connection) and burn an API test call for nothing.
+        if k and k != load_api_key():
             save_api_key(k)
             self._app.translator._init(k)
             self._app._check_api()
@@ -292,6 +319,9 @@ class SettingsDialog:
         self._app.cfg["tone"] = self._tone_var.get()
         self._app.cfg["custom_rules"] = self._rules_box.get("1.0", "end").strip()
         save_config(self._app.cfg)
+
+        # Start-with-Windows switch (HKCU Run registry value)
+        set_autostart(bool(self._autostart_var.get()))
 
         # Language/model may have changed — old session context would mislead
         # the model (turns in the wrong language), so start fresh.
@@ -316,10 +346,7 @@ class SettingsDialog:
         self._close()
 
     def _close(self):
-        self._app._hotkey.unregister()
-        self._app._hotkey.register(
-            self._app.cfg.get("hotkey", "ctrl+shift+t"),
-            lambda: self._app.after(0, self._app._show_quick_popup)
-        )
+        # register() tears down any previous registration itself
+        self._app._register_hotkey(self._app.cfg.get("hotkey", "ctrl+shift+t"))
         if self._dialog.winfo_exists():
             self._dialog.destroy()

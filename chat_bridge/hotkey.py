@@ -8,6 +8,7 @@ import ctypes
 import ctypes.wintypes
 import logging
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def parse_hotkey(hk: str) -> tuple[int, int]:
             mods |= MOD_WIN
         elif len(p) == 1 and p.isalpha():
             vk = ord(p.upper())
-        elif p.isdigit():
+        elif len(p) == 1 and p.isdigit():
             vk = ord(p)
         elif p in _OEM_MAP:
             vk = _OEM_MAP[p]
@@ -60,37 +61,88 @@ class NativeHotkey:
         self._thread: threading.Thread | None = None
         self._thread_id: int = 0
         self._callback = None
+        self._on_fail = None
 
-    def register(self, hotkey_str: str, callback):
-        """Register a global hotkey. callback() is called from a background thread."""
+    def register(self, hotkey_str: str, callback, on_fail=None):
+        """Register a global hotkey. callback() is called from a background thread.
+
+        on_fail(message) is called from the background thread if registration
+        can't be completed — otherwise failures are invisible to the UI.
+
+        Idempotent: any previous registration is torn down synchronously first,
+        so re-registering the same combo can't race the old thread that still
+        holds it system-wide.
+        """
+        self.unregister()
         self._callback = callback
+        self._on_fail = on_fail
         self._thread = threading.Thread(
             target=self._message_loop, args=(hotkey_str,), daemon=True
         )
         self._thread.start()
-        logger.info(f"Hotkey registered: {hotkey_str.upper()}")
+        # Win32 thread id, valid immediately after start() — lets unregister()
+        # work even before the child thread has run a single instruction.
+        self._thread_id = self._thread.native_id
 
     def unregister(self):
-        """Unregister the hotkey by posting WM_QUIT to the message loop thread."""
-        if self._thread_id:
-            user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
+        """Stop the message-loop thread and wait for it to release the hotkey."""
+        t, tid = self._thread, self._thread_id
+        self._thread = None
+        self._thread_id = 0
+        if not t or not t.is_alive():
+            return
+        if tid:
+            # The thread's message queue may not exist in its first moments —
+            # retry the post instead of dropping it (an orphaned loop would keep
+            # the combo registered for the process lifetime).
+            for _ in range(25):
+                if user32.PostThreadMessageW(tid, 0x0012, 0, 0):  # WM_QUIT
+                    break
+                time.sleep(0.02)
+        t.join(timeout=1.0)
+        if t.is_alive():
+            logger.warning("Hotkey thread did not exit within 1s.")
+        else:
             logger.info("Hotkey unregistered.")
-            self._thread_id = 0
+
+    def _fail(self, msg: str):
+        """Log a registration failure and surface it to the app if it asked."""
+        logger.error(msg)
+        if self._on_fail:
+            try:
+                self._on_fail(msg)
+            except Exception:
+                pass
 
     def _message_loop(self, hk_str: str):
         """Blocking message loop that listens for the registered hotkey."""
-        self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
-        mods, vk = parse_hotkey(hk_str)
-
-        if not vk:
-            logger.error(f"Failed to parse hotkey '{hk_str}': no valid key found.")
+        try:
+            mods, vk = parse_hotkey(hk_str)
+        except Exception as e:
+            self._fail(f"Hotkey '{hk_str}' could not be parsed: {e}")
             return
-
-        if not user32.RegisterHotKey(None, 1, mods, vk):
-            logger.error(f"RegisterHotKey failed for '{hk_str}' (key may be in use).")
+        if not vk:
+            self._fail(f"Hotkey '{hk_str}' has no valid key.")
             return
 
         msg = ctypes.wintypes.MSG()
+        # Force-create this thread's message queue up front so unregister()'s
+        # WM_QUIT always has somewhere to land.
+        user32.PeekMessageW(ctypes.byref(msg), None, 0x0400, 0x0400, 0)
+
+        # A previous thread may still be tearing down the same combo — retry
+        # briefly instead of failing silently and leaving the app hotkey-less.
+        registered = False
+        for _ in range(25):
+            if user32.RegisterHotKey(None, 1, mods, vk):
+                registered = True
+                break
+            time.sleep(0.02)
+        if not registered:
+            self._fail(f"'{hk_str.upper()}' is in use by another app.")
+            return
+        logger.info(f"Hotkey registered: {hk_str.upper()}")
+
         while True:
             bRet = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
             if bRet <= 0:

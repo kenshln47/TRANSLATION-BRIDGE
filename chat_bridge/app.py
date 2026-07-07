@@ -1,5 +1,5 @@
 """
-Translation Bridge v8.2
+Translation Bridge v8.4
 Multi-language translator via OpenRouter (selectable model)
 
 Main Application — ties together all modules.
@@ -95,6 +95,10 @@ class App(ctk.CTk):
         self.translator = Translator()
         self.is_busy = False
         self.cfg = load_config()
+        # Model labels change across versions — a stale label in config would
+        # show as an out-of-list entry in Settings while silently falling back.
+        if self.cfg.get("model") not in MODEL_OPTIONS:
+            self.cfg["model"] = DEFAULT_MODEL_LABEL
         self.translator.set_model(
             MODEL_OPTIONS.get(self.cfg.get("model", DEFAULT_MODEL_LABEL), OPENROUTER_MODEL)
         )
@@ -103,6 +107,7 @@ class App(ctk.CTk):
         self._last_hwnd = None
         self._t0 = 0
         self._hotkey_popup = None
+        self._popup_cancel = None
         self._history = load_history()
         self._history_panel = HistoryPanel(self)
         # In-game session memory: recent (source, translation) pairs sent as context
@@ -127,12 +132,15 @@ class App(ctk.CTk):
             SetupScreen(self).build()
 
         self._poll_window()
-        self._hotkey.register(
-            self.cfg.get("hotkey", DEFAULT_HOTKEY),
-            lambda: self.after(0, self._show_quick_popup)
-        )
+        self._register_hotkey(self.cfg.get("hotkey", DEFAULT_HOTKEY))
 
         self.protocol("WM_DELETE_WINDOW", self._hide_window)
+
+        # Launched by Windows autostart: start hidden in the tray, not as a
+        # window popping over whatever the user is doing at login.
+        if "--tray" in sys.argv:
+            self.after(300, self._hide_window)
+
         logger.info("Application initialized.")
 
     def destroy(self):
@@ -151,6 +159,22 @@ class App(ctk.CTk):
         self.lift()
         self.focus_force()
 
+    # ── HOTKEY ──
+
+    def _register_hotkey(self, hk_str: str):
+        """Single place that binds the global hotkey and surfaces failures in the UI."""
+        self._hotkey.register(
+            hk_str,
+            lambda: self.after(0, self._show_quick_popup),
+            on_fail=lambda msg: self.after(0, self._hotkey_failed, msg),
+        )
+
+    def _hotkey_failed(self, msg: str):
+        """Registration failed — tell the user instead of failing silently."""
+        Toast.show(self, f"Hotkey failed: {msg}", style="error")
+        if hasattr(self, "stat"):
+            self._status("⚠️ Hotkey inactive — set a new one in Settings", C.ERROR)
+
     # ── WINDOW ──
 
     def _setup_window(self):
@@ -166,9 +190,13 @@ class App(ctk.CTk):
 
         if HAS_PIL and os.path.exists(LOGO_FILE):
             try:
-                os.makedirs(ASSETS_DIR, exist_ok=True)
-                img = Image.open(LOGO_FILE).resize((64, 64), Image.LANCZOS)
-                img.save(ICON_FILE, format="ICO", sizes=[(64, 64)])
+                # Regenerate the .ico only when missing or older than the logo —
+                # not on every launch.
+                if (not os.path.exists(ICON_FILE)
+                        or os.path.getmtime(ICON_FILE) < os.path.getmtime(LOGO_FILE)):
+                    os.makedirs(ASSETS_DIR, exist_ok=True)
+                    img = Image.open(LOGO_FILE).resize((64, 64), Image.LANCZOS)
+                    img.save(ICON_FILE, format="ICO", sizes=[(64, 64)])
                 self.iconbitmap(ICON_FILE)
             except Exception as e:
                 logger.warning(f"Failed to set window icon: {e}")
@@ -205,9 +233,15 @@ class App(ctk.CTk):
 
     def _show_quick_popup(self):
         if self._hotkey_popup and self._hotkey_popup.winfo_exists():
+            # Toggling the popup away also aborts any in-flight translation
+            if self._popup_cancel is not None:
+                self._popup_cancel.set()
             self._hotkey_popup.destroy()
             self._hotkey_popup = None
             return
+
+        # Fresh cancel token for this popup's lifetime
+        self._popup_cancel = cancel_flag = threading.Event()
 
         # Warm the API connection while the user types (zero-token, best-effort)
         threading.Thread(target=self.translator.warm, daemon=True).start()
@@ -267,21 +301,31 @@ class App(ctk.CTk):
             inner, text="", font=ctk.CTkFont(size=10), text_color=C.ACCENT,
         )
 
+        busy = {"v": False}
+
         def _close(e=None):
+            # Esc (or any close) aborts an in-flight translation: nothing gets
+            # pasted, sent, copied, or saved after this point.
+            cancel_flag.set()
             if p.winfo_exists():
                 p.destroy()
             self._hotkey_popup = None
 
         def _go(e=None):
+            if busy["v"]:
+                return
             txt = entry.get().strip()
             if not txt:
                 _close()
                 return
+            busy["v"] = True
             entry.configure(state="disabled")
             status_lbl.pack(side="right", padx=(0, 10))
             status_lbl.configure(text="⏳")
 
             def _handle_error(msg):
+                if cancel_flag.is_set():
+                    return
                 if p.winfo_exists():
                     status_lbl.configure(text=f"❌ {msg}", text_color=C.ERROR)
                     p.after(2000, _close)
@@ -291,7 +335,23 @@ class App(ctk.CTk):
             # Snapshot session context on the main thread (Tk event handler)
             ctx = self._session_context()
 
+            started = {"v": False}
+
+            def _show_token(tok):
+                # Live-stream the translation into the entry so the popup never
+                # feels stuck — first token replaces the source text.
+                if cancel_flag.is_set() or not p.winfo_exists():
+                    return
+                entry.configure(state="normal")
+                if not started["v"]:
+                    entry.delete(0, "end")
+                    started["v"] = True
+                entry.insert("end", tok)
+                entry.configure(state="disabled")
+
             def _finish(result):
+                if cancel_flag.is_set():
+                    return
                 # Main thread: clipboard, history file I/O, session memory, then paste
                 self._safe_copy(result)
                 self._history = add_history_entry(
@@ -301,6 +361,9 @@ class App(ctk.CTk):
                 _paste_and_close(result)
 
             def _do():
+                def on_token(tok):
+                    self.after(0, _show_token, tok)
+
                 def on_done(result):
                     self.after(0, _finish, result)
 
@@ -314,8 +377,8 @@ class App(ctk.CTk):
                     ai_tone=self.cfg.get("tone", "Gamer (Default)"),
                     source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
                     target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
-                    context=ctx,
-                    on_done=on_done, on_error=on_error
+                    context=ctx, cancel=cancel_flag,
+                    on_token=on_token, on_done=on_done, on_error=on_error
                 )
 
             threading.Thread(target=_do, daemon=True).start()
@@ -353,6 +416,9 @@ class App(ctk.CTk):
 
         entry.bind("<Return>", _go)
         entry.bind("<Escape>", _close)
+        # Also on the toplevel: the entry is disabled while translating, so Esc
+        # must still reach us to cancel.
+        p.bind("<Escape>", _close)
         p.bind("<FocusOut>", lambda e: None)
 
     # ═══════════════════════════════════════════════════════════

@@ -163,3 +163,52 @@ def add_history_entry(arabic: str, english: str, history: list, max_items: int =
     history = history[:max_items]
     save_history(history)
     return history
+
+
+# ─────────────────────────────────────────────────────────────
+# START WITH WINDOWS (HKCU Run key — per-user, no admin needed)
+# ─────────────────────────────────────────────────────────────
+
+_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_RUN_NAME = "TranslationBridge"
+
+
+def _autostart_command() -> str:
+    """Command Windows should run at login. --tray starts hidden in the tray."""
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" --tray'
+    # Dev checkout: prefer pythonw so no console window flashes at login
+    pyw = sys.executable.replace("python.exe", "pythonw.exe")
+    if not os.path.exists(pyw):
+        pyw = sys.executable
+    return f'"{pyw}" "{os.path.join(APP_DIR, "chat_bridge.py")}" --tray'
+
+
+def is_autostart_enabled() -> bool:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
+            winreg.QueryValueEx(key, _RUN_NAME)
+            return True
+    except OSError:
+        return False
+
+
+def set_autostart(enabled: bool) -> bool:
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0,
+                            winreg.KEY_SET_VALUE) as key:
+            if enabled:
+                winreg.SetValueEx(key, _RUN_NAME, 0, winreg.REG_SZ, _autostart_command())
+                logger.info("Autostart enabled.")
+            else:
+                try:
+                    winreg.DeleteValue(key, _RUN_NAME)
+                    logger.info("Autostart disabled.")
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update autostart: {e}")
+        return False
