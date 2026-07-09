@@ -27,26 +27,29 @@
         <a href="#privacy" data-i18n="navPrivacy">الخصوصية</a>
         <a class="nav-github" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">GitHub</a>
         <div class="language-switcher">
-          <button class="language-button" type="button" aria-expanded="false" aria-controls="language-menu" data-language-toggle>
+          <button class="language-button" type="button" aria-expanded="false" aria-controls="language-menu" aria-haspopup="listbox" data-language-toggle>
             <span class="language-button__flag" data-language-flag>🇸🇦</span>
-            <span data-language-current>العربية (خليجي)</span>
+            <span class="language-button__copy"><small data-i18n="languageLabel">لغة الموقع</small><span data-language-current>العربية (خليجي)</span></span>
             <span class="language-button__chevron" aria-hidden="true">⌄</span>
           </button>
           <div class="language-menu" id="language-menu" data-language-menu hidden>
-            <button type="button" data-language="ar-gulf">🇸🇦 العربية (خليجي)</button>
-            <button type="button" data-language="ar-standard">🇸🇦 العربية (فصحى)</button>
-            <button type="button" data-language="en">🇬🇧 English</button>
-            <button type="button" data-language="tr">🇹🇷 Türkçe</button>
-            <button type="button" data-language="es">🇪🇸 Español</button>
-            <button type="button" data-language="fr">🇫🇷 Français</button>
-            <button type="button" data-language="pt">🇧🇷 Português</button>
-            <button type="button" data-language="ru">🇷🇺 Русский</button>
-            <button type="button" data-language="de">🇩🇪 Deutsch</button>
-            <button type="button" data-language="ko">🇰🇷 한국어</button>
-            <button type="button" data-language="ja">🇯🇵 日本語</button>
-            <button type="button" data-language="hi">🇮🇳 हिंदी</button>
-            <button type="button" data-language="zh">🇨🇳 中文</button>
-            <button type="button" data-language="auto">🌐 Auto-detect</button>
+            <div class="language-menu__heading"><span data-i18n="languageTitle">اختر لغة الموقع</span><small data-i18n="languageHint">نفس اللغات المتاحة في التطبيق</small></div>
+            <div class="language-options" role="listbox" aria-label="لغات الموقع">
+              <button type="button" data-language="ar-gulf">🇸🇦 العربية (خليجي)</button>
+              <button type="button" data-language="ar-standard">🇸🇦 العربية (فصحى)</button>
+              <button type="button" data-language="en">🇬🇧 English</button>
+              <button type="button" data-language="tr">🇹🇷 Türkçe</button>
+              <button type="button" data-language="es">🇪🇸 Español</button>
+              <button type="button" data-language="fr">🇫🇷 Français</button>
+              <button type="button" data-language="pt">🇧🇷 Português</button>
+              <button type="button" data-language="ru">🇷🇺 Русский</button>
+              <button type="button" data-language="de">🇩🇪 Deutsch</button>
+              <button type="button" data-language="ko">🇰🇷 한국어</button>
+              <button type="button" data-language="ja">🇯🇵 日本語</button>
+              <button type="button" data-language="hi">🇮🇳 हिंदी</button>
+              <button type="button" data-language="zh">🇨🇳 中文</button>
+              <button type="button" data-language="auto">🌐 Auto-detect</button>
+            </div>
           </div>
         </div>
       </nav>
