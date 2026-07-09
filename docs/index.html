@@ -1,134 +1,130 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Translation Bridge — ترجم بأي لغة بسرعة البرق أثناء اللعب. يدعم 14+ لغة — مصمم للقيمرز.">
-    <meta name="keywords" content="translation, gaming, multilingual, gamer slang, ترجمة, قيمنق, ألعاب">
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Translation Bridge — جسر الترجمة">
-    <meta property="og:description" content="ترجم بأي لغة بسرعة البرق أثناء اللعب. يدعم 14+ لغة — مصمم للقيمرز.">
-    <meta property="og:url" content="https://kenshln47.github.io/TRANSLATION-BRIDGE/">
-    <meta property="og:image" content="https://raw.githubusercontent.com/kenshln47/TRANSLATION-BRIDGE/main/assets/banner.png">
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Translation Bridge — جسر الترجمة">
-    <meta name="twitter:description" content="ترجم بأي لغة بسرعة البرق أثناء اللعب. يدعم 14+ لغة.">
-    <meta name="twitter:image" content="https://raw.githubusercontent.com/kenshln47/TRANSLATION-BRIDGE/main/assets/banner.png">
-    <title>Translation Bridge — جسر الترجمة</title>
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/kenshln47/TRANSLATION-BRIDGE/main/assets/logo.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Translation Bridge: أداة ترجمة خفيفة للمحادثات داخل الألعاب، مع اختصار عالمي وخيارات إرسال آمنة.">
+  <meta name="theme-color" content="#101512">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Translation Bridge — اكتب كما تتكلم">
+  <meta property="og:description" content="ترجمة عملية لمحادثات الألعاب بدون تشتيت.">
+  <meta property="og:url" content="https://kenshln47.github.io/TRANSLATION-BRIDGE/">
+  <title>Translation Bridge — اكتب كما تتكلم</title>
+  <link rel="icon" href="brand-mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="bg-grid"></div>
-    <div class="bg-glow bg-glow--1"></div>
-    <div class="bg-glow bg-glow--2"></div>
-    <nav class="navbar">
-        <div class="container nav-content">
-            <a href="#" class="nav-logo">
-                <span class="nav-logo-icon">⚡</span>
-                <span>Translation Bridge</span>
-            </a>
-            <div class="nav-links">
-                <a href="#features" id="tx-nav-feat">المميزات</a>
-                <a href="#how" id="tx-nav-how">طريقة العمل</a>
-                <a href="#games" id="tx-nav-games">الألعاب</a>
-                <div class="lang-selector">
-                    <button id="lang-toggle" class="btn btn--outline btn--sm" onclick="toggleLangMenu()">🇸🇦 العربية</button>
-                    <div id="lang-menu" class="lang-menu">
-                        <button onclick="setLang('ar')">🇸🇦 العربية</button>
-                        <button onclick="setLang('en')">🇬🇧 English</button>
-                        <button onclick="setLang('tr')">🇹🇷 Türkçe</button>
-                        <button onclick="setLang('es')">🇪🇸 Español</button>
-                        <button onclick="setLang('fr')">🇫🇷 Français</button>
-                        <button onclick="setLang('pt')">🇧🇷 Português</button>
-                        <button onclick="setLang('ru')">🇷🇺 Русский</button>
-                        <button onclick="setLang('de')">🇩🇪 Deutsch</button>
-                        <button onclick="setLang('ko')">🇰🇷 한국어</button>
-                        <button onclick="setLang('ja')">🇯🇵 日本語</button>
-                        <button onclick="setLang('zh')">🇨🇳 中文</button>
-                        <button onclick="setLang('hi')">🇮🇳 हिंदी</button>
-                    </div>
-                </div>
-                <a href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" class="btn btn--outline btn--sm">GitHub ↗</a>
-            </div>
+  <a class="skip-link" href="#main">تجاوز إلى المحتوى</a>
+
+  <header class="site-header" data-header>
+    <div class="container nav">
+      <a class="brand" href="#top" aria-label="Translation Bridge">
+        <img src="brand-mark.svg" width="36" height="36" alt="">
+        <span>Translation Bridge</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
+        <span></span><span></span><span></span><span class="sr-only">فتح القائمة</span>
+      </button>
+      <nav class="nav-links" id="site-nav" data-menu>
+        <a href="#why">الفكرة</a>
+        <a href="#flow">كيف تعمل</a>
+        <a href="#privacy">الخصوصية</a>
+        <a class="nav-github" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <p class="eyebrow"><span></span> ترجمة للمحادثة، لا للضجيج</p>
+          <h1>اكتب بطريقتك.<br><em>وخلك في اللعب.</em></h1>
+          <p class="hero-text">Translation Bridge يحوّل رسائلك إلى اللغة التي تحتاجها من نافذة خفيفة، مع تحكم واضح في النسخ واللصق والإرسال.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" target="_blank" rel="noopener noreferrer">عرض الإصدارات <span aria-hidden="true">←</span></a>
+            <a class="text-link" href="#flow">شوف طريقة العمل <span aria-hidden="true">↓</span></a>
+          </div>
+          <ul class="hero-notes" aria-label="مزايا أساسية">
+            <li>ويندوز</li>
+            <li>اختصار عالمي</li>
+            <li>وضع النسخ الآمن افتراضياً</li>
+          </ul>
         </div>
-    </nav>
-    <section class="hero" id="hero">
-        <div class="container hero-content">
-            <div class="hero-badge"><span class="badge-dot"></span><span id="tx-badge">أداة مجانية ومفتوحة المصدر</span></div>
-            <h1 class="hero-title" id="tx-hero-title">ترجم <span class="text-gradient">بسرعة البرق</span><br>وأنت تلعب</h1>
-            <p class="hero-subtitle" id="tx-hero-sub">اكتب بلغتك، يرسل بأي لغة ثانية. بدون لاق، بدون تأخير، بدون أي تعقيد.<br>يدعم 14+ لغة — مصمم خصيصاً للقيمرز.</p>
-            <div class="hero-cta">
-                <a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" class="btn btn--primary btn--lg" target="_blank" id="tx-dl-btn">⬇️ تحميل مجاني</a>
-                <a href="#how" class="btn btn--ghost btn--lg" id="tx-how-btn">شوف كيف يشتغل ↓</a>
+
+        <div class="product-frame reveal" aria-label="تصور لواجهة Translation Bridge">
+          <div class="window-bar"><span></span><span></span><span></span><b>BRIDGE</b></div>
+          <div class="window-body">
+            <aside class="mini-rail">
+              <img src="brand-mark.svg" width="33" height="33" alt="">
+              <small>LIVE<br>TRANSLATION</small>
+              <div class="mini-line active"></div><div class="mini-line"></div><div class="mini-line"></div>
+              <kbd>CTRL<br>SHIFT<br>T</kbd>
+            </aside>
+            <div class="mini-desk">
+              <div class="mini-title"><span>TRANSLATION DESK</span><i>READY</i></div>
+              <h2>Write it once.<br>Keep playing.</h2>
+              <div class="route"><small>LANGUAGE ROUTE</small><strong>العربية <b>→</b> English</strong></div>
+              <div class="mini-card"><small>INPUT · العربية</small><p>شباب نروح للهدف؟</p><button>TRANSLATE</button></div>
+              <div class="mini-card output"><small>OUTPUT · English</small><p>Should we head to the objective?</p><button class="quiet">PASTE RESULT TO GAME</button></div>
             </div>
-            <div class="hero-stats">
-                <div class="stat"><span class="stat-value">14+</span><span class="stat-label" id="tx-stat-lang">لغة مدعومة</span></div>
-                <div class="stat-divider"></div>
-                <div class="stat"><span class="stat-value">~1s</span><span class="stat-label" id="tx-stat-time">وقت الترجمة</span></div>
-                <div class="stat-divider"></div>
-                <div class="stat"><span class="stat-value">0</span><span class="stat-label">FPS Drop</span></div>
-            </div>
+          </div>
         </div>
+      </div>
+      <div class="bridge-stroke" aria-hidden="true"><i></i><i></i><i></i></div>
     </section>
-    <section class="features" id="features">
-        <div class="container">
-            <h2 class="section-title reveal" id="tx-feat-title">ليش <span class="text-gradient">Translation Bridge</span>؟</h2>
-            <p class="section-subtitle reveal" id="tx-feat-sub">مو بس ترجمة — نظام كامل مصمم للقيمنق</p>
-            <div class="features-grid">
-                <div class="feature-card reveal"><div class="feature-icon">⚡</div><h3 id="tx-f1t">Zero-Lag Hotkeys</h3><p id="tx-f1d">اختصارات مربوطة مباشرة بنظام ويندوز. مافي hook بطيء، مافي drop بالفريمات.</p></div>
-                <div class="feature-card reveal"><div class="feature-icon">🌍</div><h3 id="tx-f2t">14+ لغة</h3><p id="tx-f2d">مو بس عربي لإنجليزي — اختار أي لغة مصدر وأي لغة هدف. أي لغة لأي لغة.</p></div>
-                <div class="feature-card reveal"><div class="feature-icon">🧠</div><h3 id="tx-f3t">AI يفهم السياق</h3><p id="tx-f3d">يفهم العامية والجنس من تصريف الفعل، ويتذكر محادثتك داخل القيم. مو ترجمة حرفية.</p></div>
-                <div class="feature-card reveal"><div class="feature-icon">🎮</div><h3 id="tx-f4t">Game Presets</h3><p id="tx-f4d">قواميس جاهزة لـ GTA RP، Valorant، FIFA، LoL، Fortnite وغيرها.</p></div>
-                <div class="feature-card reveal"><div class="feature-icon">👻</div><h3 id="tx-f5t">Ghost UX</h3><p id="tx-f5d">نافذة الإدخال تدمر نفسها فوراً بعد الإرسال. ترجع للعبة بأجزاء من الثانية.</p></div>
-                <div class="feature-card reveal"><div class="feature-icon">🤬</div><h3 id="tx-f6t">4 أنماط ترجمة</h3><p id="tx-f6d">Gamer عادي، Chill مريح، Formal رسمي، أو Rage Mode 🔥</p></div>
-            </div>
-        </div>
+
+    <section class="proof" aria-label="مبادئ المنتج">
+      <div class="container proof-grid reveal">
+        <p><b>01</b> مصمم للمحادثة السريعة، لا للصفحات الطويلة.</p>
+        <p><b>02</b> أنت تختار متى تنسخ ومتى تلصق ومتى ترسل.</p>
+        <p><b>03</b> السياق قصير ومحدد حتى تبقى الاستجابة خفيفة.</p>
+      </div>
     </section>
-    <section class="how" id="how">
-        <div class="container">
-            <h2 class="section-title reveal" id="tx-how-title">كيف يشتغل؟</h2>
-            <p class="section-subtitle reveal" id="tx-how-sub">ثلاث خطوات وبس</p>
-            <div class="steps">
-                <div class="step reveal"><div class="step-number">1</div><div class="step-content"><h3 id="tx-s1t">اضغط الاختصار</h3><p id="tx-s1d">الافتراضي <kbd>Ctrl+Shift+T</kbd> — تطلع نافذة صغيرة شفافة.</p></div></div>
-                <div class="step reveal"><div class="step-number">2</div><div class="step-content"><h3 id="tx-s2t">اكتب بلغتك</h3><p id="tx-s2d">اكتب جملتك بأي لغة — عربي، تركي، كوري، أو أي شي.</p></div></div>
-                <div class="step reveal"><div class="step-number">3</div><div class="step-content"><h3 id="tx-s3t">Enter وخلاص</h3><p id="tx-s3d">يترجم ويلصق ويرسل بالشات تلقائياً.</p></div></div>
-            </div>
-        </div>
+
+    <section class="section" id="why">
+      <div class="container split-heading reveal">
+        <p class="eyebrow">الفكرة</p>
+        <div><h2>الأشياء الصغيرة هي التي تحافظ على تركيزك.</h2><p>لذلك الواجهة لا تحاول أن تكون لعبة ثانية. هي مساحة هادئة بينك وبين الدردشة.</p></div>
+      </div>
+      <div class="container feature-grid">
+        <article class="feature reveal"><span>01</span><h3>اختصار في مكانه</h3><p>افتح نافذة ترجمة صغيرة فوق اللعبة، اكتب، ثم اختفِ منها مباشرة بعد إنهاء المهمة.</p></article>
+        <article class="feature reveal"><span>02</span><h3>ترجمة تفهم النبرة</h3><p>تستخدم الأداة سياقاً قصيراً وإعدادات للعبة والنبرة بدل ترجمة كلمة بكلمة.</p></article>
+        <article class="feature reveal"><span>03</span><h3>إرسال بحدود واضحة</h3><p>يُحفظ هدف الإرسال من لحظة بدء الطلب، ولا تُخمن الأداة نافذة أخرى إذا تغيّر التركيز.</p></article>
+      </div>
     </section>
-    <section class="games" id="games">
-        <div class="container">
-            <h2 class="section-title reveal" id="tx-games-title">يدعم <span class="text-gradient">ألعابك المفضلة</span></h2>
-            <div class="games-row">
-                <div class="game-chip reveal">GTA V RP</div><div class="game-chip reveal">Valorant</div><div class="game-chip reveal">CS2</div>
-                <div class="game-chip reveal">EA FC (FIFA)</div><div class="game-chip reveal">League of Legends</div><div class="game-chip reveal">Dota 2</div>
-                <div class="game-chip reveal">Overwatch</div><div class="game-chip reveal">Apex Legends</div><div class="game-chip reveal">Fortnite</div>
-                <div class="game-chip reveal">Minecraft</div><div class="game-chip reveal">Roblox</div>
-                <div class="game-chip game-chip--any reveal" id="tx-any-game">+ أي لعبة ثانية</div>
-            </div>
-        </div>
+
+    <section class="section flow-section" id="flow">
+      <div class="container flow-layout">
+        <div class="flow-intro reveal"><p class="eyebrow">خط سير بسيط</p><h2>ثلاث حركات،<br>وباقي الوقت للعب.</h2></div>
+        <ol class="flow-list">
+          <li class="reveal"><span>1</span><div><h3>افتح Bridge</h3><p>استخدم الاختصار العالمي أو اكتب مباشرة من مساحة الترجمة.</p></div></li>
+          <li class="reveal"><span>2</span><div><h3>اكتب الرسالة</h3><p>حدد لغتي المصدر والهدف مرة، ثم اكتب بالطريقة المعتادة.</p></div></li>
+          <li class="reveal"><span>3</span><div><h3>اختر الفعل</h3><p>انسخ النتيجة فقط، الصقها، أو أرسلها — القرار يبقى لك.</p></div></li>
+        </ol>
+      </div>
     </section>
-    <section class="cta">
-        <div class="container cta-content">
-            <h2 class="cta-title" id="tx-cta-title">جاهز تبدأ؟</h2>
-            <p class="cta-subtitle" id="tx-cta-sub">حمّل Translation Bridge مجاناً وابدأ تتكلم بأي لغة بالشات.</p>
-            <a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" class="btn btn--primary btn--lg" target="_blank" id="tx-cta-btn">⬇️ تحميل الحين</a>
-        </div>
+
+    <section class="section privacy" id="privacy">
+      <div class="container privacy-card reveal">
+        <div><p class="eyebrow">خصوصية مفهومة</p><h2>ماذا يبقى عندك؟</h2><p>مفتاح API مشفر على جهازك. سجل الترجمة متوقف افتراضياً، وذاكرة الترجمة المتكررة مؤقتة ولا تُكتب على القرص.</p></div>
+        <ul>
+          <li><b>المفتاح</b><span>محلي ومشفر في ويندوز</span></li>
+          <li><b>السجل</b><span>اختياري ويمكن مسحه</span></li>
+          <li><b>التخزين المؤقت</b><span>في الذاكرة لمدة قصيرة فقط</span></li>
+        </ul>
+      </div>
     </section>
-    <footer class="footer">
-        <div class="container footer-content">
-            <p id="tx-footer">Translation Bridge — مشروع مفتوح المصدر</p>
-            <div class="footer-links">
-                <a href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank">GitHub</a>
-                <a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/issues" target="_blank" id="tx-report">بلّغ عن مشكلة</a>
-            </div>
-        </div>
-    </footer>
-    <script src="script.js"></script>
+
+    <section class="final-cta">
+      <div class="container reveal"><p class="eyebrow">جاهز عندما تكون أنت جاهز</p><h2>لغة أقل كحاجز.<br>لعب أكثر كالمعتاد.</h2><a class="button button-dark" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">افتح المشروع على GitHub <span aria-hidden="true">←</span></a></div>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="container"><a class="brand" href="#top"><img src="brand-mark.svg" width="30" height="30" alt=""><span>Translation Bridge</span></a><p>أداة مفتوحة المصدر لترجمة محادثات الألعاب.</p><a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/issues" target="_blank" rel="noopener noreferrer">الإبلاغ عن مشكلة</a></div></footer>
+  <script src="script.js"></script>
 </body>
 </html>

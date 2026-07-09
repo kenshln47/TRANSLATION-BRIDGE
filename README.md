@@ -1,235 +1,106 @@
 <div align="center">
+  <img src="assets/brand-mark.svg" alt="Translation Bridge" width="96">
 
-<img src="assets/banner.png" alt="Translation Bridge Banner" width="100%">
+  # Translation Bridge
 
-<br><br>
+  ### اكتب بطريقتك. وخلك في اللعب.
 
-# ⚡ Translation Bridge — جسر الترجمة
-
-### ترجم بسرعة البرق وأنت تلعب
-
-<br>
-
-[![GitHub release](https://img.shields.io/github/v/release/kenshln47/TRANSLATION-BRIDGE?style=for-the-badge&color=3ecf8e&label=Download)](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases)
-
-<br>
-
-[![Stars](https://img.shields.io/github/stars/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/stargazers)
-[![Forks](https://img.shields.io/github/forks/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/network/members)
-[![Issues](https://img.shields.io/github/issues/kenshln47/TRANSLATION-BRIDGE?style=flat-square)](https://github.com/kenshln47/TRANSLATION-BRIDGE/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/kenshln47/TRANSLATION-BRIDGE?style=flat-square&color=3ecf8e)](https://github.com/kenshln47/TRANSLATION-BRIDGE/commits/main)
-
-<br>
-
-**اكتب بلغتك → يوصل بأي لغة ثانية. بدون لاق، بدون تعقيد.**
-
-🇸🇦 🇬🇧 🇹🇷 🇪🇸 🇫🇷 🇧🇷 🇷🇺 🇩🇪 🇰🇷 🇯🇵 🇮🇳 🇨🇳 +المزيد
-
-<br>
-
-[📥 تحميل مجاني](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases) · [🌐 الموقع](https://kenshln47.github.io/TRANSLATION-BRIDGE/) · [🐛 بلّغ عن مشكلة](https://github.com/kenshln47/TRANSLATION-BRIDGE/issues)
-
+  [الإصدارات](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases) · [الموقع](https://kenshln47.github.io/TRANSLATION-BRIDGE/) · [الإبلاغ عن مشكلة](https://github.com/kenshln47/TRANSLATION-BRIDGE/issues)
 </div>
 
-<br>
+Translation Bridge أداة ويندوز خفيفة لترجمة محادثات الألعاب. تفتحها باختصار عالمي أو من الواجهة، تكتب الرسالة، ثم تختار بوضوح: نسخ فقط، لصق، أو لصق وإرسال.
 
----
+## الفكرة
 
-<br>
+لا تحاول الأداة أن تكون جزءاً من اللعبة أو طبقة بصرية مزعجة فوقها. هي مساحة صغيرة وهادئة بينك وبين الدردشة: تترجم الرسالة، تحفظ نتيجة العملية في الحافظة، ثم تعود للعب.
 
-## 🎯 الفكرة
+| خطوة | ما يحدث |
+| --- | --- |
+| افتح | استخدم الاختصار الافتراضي `Ctrl+Shift+T` لفتح نافذة إدخال عابرة. |
+| اكتب | اختر لغة المصدر والهدف والنبرة، ثم اكتب رسالتك. |
+| قرر | انسخ النتيجة فقط، أو الصقها، أو أرسلها إلى نافذة اللعبة المحفوظة. |
 
-تطبيق ويندوز يترجم لك وأنت تلعب. تضغط اختصار، تكتب بلغتك، يرسل بلغة الشخص الثاني. يدعم **14+ لغة** ويفهم العامية والسلانق. مو ترجمة قوقل حرفية.
+## نظام التصميم
 
-<br>
+تمت إعادة بناء الواجهة والموقع وREADME على نفس الهوية الهادئة:
 
-## ✨ المميزات
+- علامة جسر هندسية بسيطة؛ لا تعتمد على زخارف مولّدة أو صور ألعاب عامة.
+- حبر أخضر داكن، أبيض دافئ، وأخضر ورقي واحد للتأكيد بدلاً من ألوان نيون متنافسة.
+- شاشة التطبيق تقسم الأدوات الثابتة في شريط جانبي ومساحة كتابة واحدة واضحة.
+- شاشة الإعداد، السجل، والتنبيهات تتبع الأسطح والمسافات ونبرة الأزرار نفسها.
+- صفحة الموقع تستخدم تمثيلاً مبسطاً للواجهة الحقيقية، لا وعوداً مبالغاً فيها أو أرقام أداء غير قابلة للضمان.
 
-<table>
-<tr>
-<td width="50%">
+ملفات الهوية: [`assets/brand-mark.svg`](assets/brand-mark.svg)، [`docs/brand-mark.svg`](docs/brand-mark.svg)، و[`chat_bridge/ui/theme.py`](chat_bridge/ui/theme.py).
 
-### ⚡ Zero-Lag Hotkeys
-اختصارات مربوطة مباشرة بـ Windows API. **0% CPU** وبدون أي drop بالفريمات
+## ما الذي يقدمه
 
-### 🌍 14+ لغة
-اختار أي لغة مصدر وأي لغة هدف. عربي، إنجليزي، تركي، كوري، ياباني وغيرها
+- اختصار عالمي أصلي على ويندوز، مع حماية من تكرار ضغط المفتاح.
+- لغة مصدر وهدف مستقلتان، ونبرة وقواعد مخصصة وسياق جلسة قصير.
+- بث للنتيجة أثناء وصولها حتى لا تبدو الواجهة متوقفة.
+- اتصال HTTP مستمر وتخزين مؤقت في الذاكرة للترجمات المتكررة لفترة قصيرة.
+- وضع النسخ هو الوضع الآمن الافتراضي؛ اللصق والإرسال لا يتمان إلا إلى نافذة الهدف التي التقطتها الأداة عند بدء الطلب.
+- سجل ترجمة محلي اختياري، قابل للمسح من الإعدادات.
 
-### 🧠 AI يفهم السياق
-يدعم عدة نماذج عبر OpenRouter (افتراضياً **Gemini 2.5 Flash-Lite** — الأسرع والأرخص، وتقدر تبدّله لـ Qwen أو Grok). يفهم العامية والجنس من تصريف الفعل
+## الخصوصية والأمان
 
-</td>
-<td width="50%">
+- مفتاح OpenRouter يُحفظ محلياً ومشفراً باستخدام Windows DPAPI لحساب المستخدم الحالي.
+- النص المراد ترجمته وسياق الجلسة القصير يُرسلان إلى OpenRouter والنموذج الذي اخترته؛ لا ترسل معلومات حساسة دون مراجعة سياسة مزودك.
+- سجل الترجمة متوقف افتراضياً. عند تفعيله يبقى محلياً ويمكن حذفه.
+- التخزين المؤقت للترجمات المتكررة يبقى في الذاكرة فقط لمدة عشر دقائق ولا يُكتب على القرص.
+- سجلات التطبيق لا تسجل النص الأصلي أو الترجمة.
 
-### 🎮 Game Presets
-قواميس جاهزة لـ GTA RP، Valorant، FIFA، LoL، Fortnite وغيرها
+## التشغيل
 
-### 👻 Ghost UX
-نافذة الإدخال تدمر نفسها فوراً. ترجع للعبة بأجزاء من الثانية
+### من ملف تنفيذي
 
-### 🤬 4 أنماط ترجمة
-Gamer عادي • Chill مريح • Formal رسمي • Rage Mode 🔥
+خذ النسخة من [صفحة الإصدارات](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases)، شغّل `Translation Bridge.exe`، ثم أدخل مفتاح OpenRouter في شاشة البداية.
 
-</td>
-</tr>
-</table>
+### من المصدر
 
-<br>
-
-## 🔧 كيف يشتغل؟
-
-<div align="center">
-
-| الخطوة | الوصف |
-|:------:|:-----:|
-| **1️⃣ اضغط `Ctrl+Shift+T`** | تطلع نافذة صغيرة شفافة فوق اللعبة |
-| ⬇️ | |
-| **2️⃣ اكتب بلغتك** | عربي، تركي، كوري — أي لغة تبيها |
-| ⬇️ | |
-| **3️⃣ اضغط Enter** | يترجم ويلصق ويرسل بالشات تلقائياً ⚡ |
-
-</div>
-
-<br>
-
-## 📊 هيكلية التطبيق
-
-```mermaid
-graph TD
-    A["إدخال المستخدم"] -->|"اختصار لوحة مفاتيح (Native OS)"| B["نافذة الإدخال السريعة"]
-    B -->|"نص خام"| C["محرك الترجمة (Background Thread)"]
-    
-    subgraph معالجة البيانات المحلية
-    D["config.json"] -->|"تحميل في الذاكرة"| E["مدير الإعدادات"]
-    E -->|"الاختيار النشط"| F["قاموس اللعبة (Game Preset)"]
-    E -->|"الاختيار النشط"| G["شخصية الذكاء الاصطناعي (AI Tone)"]
-    E -->|"ملفات نصية مستوردة"| H["قواعد المستخدم المخصصة"]
-    end
-    
-    F --> C
-    G --> C
-    H --> C
-    
-    C -->|"حزمة البيانات + النص"| I["واجهة OpenRouter: نموذج قابل للاختيار (Gemini / Qwen / Grok)"]
-    I -->|"استجابة غير متزامنة"| J["مدير الحافظة (Clipboard)"]
-    J -->|"نظام الحقن الشبح (Ghost UX)"| K["واجهة اللعبة النشطة"]
-```
-
-<br>
-
-## 🎮 الألعاب المدعومة
-
-<div align="center">
-
-| اللعبة | المصطلحات المتخصصة |
-|:------:|:------------------:|
-| 🚗 **GTA V RP** | VDM, RDM, NVL, OOC, كود 10 |
-| 🔫 **Valorant / CS2** | Peek, Rotate, Eco, Flash, Clutch |
-| ⚽ **EA FC (FIFA)** | Through ball, Finesse, SBC, TOTS |
-| 🧙 **LoL / Dota 2** | Gank, Dive, Feed, Baron, FF |
-| 🦸 **Overwatch / Apex** | Ult, Crack, Knock, Third-party |
-| 🏗️ **Fortnite** | Box, Crank, Edit, Storm, Rotate |
-| ⛏️ **Minecraft / Roblox** | Grief, Raid, Enchant, Obby |
-
-</div>
-
-<br>
-
-## 📁 بنية المشروع
-
-```
-TRANSLATION-BRIDGE/
-├── 📄 chat_bridge.py              ← نقطة الدخول
-├── 📦 chat_bridge/                ← الحزمة الرئيسية
-│   ├── __main__.py               ← Entry + Logging + Single Instance
-│   ├── app.py                    ← التطبيق الرئيسي (UI + Logic)
-│   ├── translator.py             ← محرك الترجمة (OpenRouter API)
-│   ├── config.py                 ← إدارة الإعدادات + المفاتيح
-│   ├── hotkey.py                 ← اختصارات Win32 الأصلية
-│   ├── tray.py                   ← System Tray
-│   ├── constants.py              ← الثوابت والـ Prompts
-│   └── 🎨 ui/
-│       ├── theme.py              ← ألوان التصميم
-│       ├── setup_screen.py       ← شاشة الإعداد الأولي
-│       ├── settings.py           ← نافذة الإعدادات
-│       ├── toast.py              ← إشعارات Toast
-│       └── history.py            ← سجل الترجمات
-├── 🖼️ assets/                     ← الأصول (logo, icon, banner)
-├── 🌐 docs/                       ← صفحة الموقع (GitHub Pages)
-├── 📋 requirements.txt
-├── 🔨 build.bat                   ← بناء ملف EXE
-└── 📜 LICENSE                     ← MIT License
-```
-
-<br>
-
-## 🚀 التثبيت والتشغيل
-
-### الطريقة السريعة (EXE)
-
-> حمّل الملف التنفيذي من [صفحة التحميل](https://github.com/kenshln47/TRANSLATION-BRIDGE/releases) وشغّله مباشرة. ما يحتاج تثبيت.
-
-### من الكود المصدري
-
-```bash
-# 1. استنسخ المشروع
+```powershell
 git clone https://github.com/kenshln47/TRANSLATION-BRIDGE.git
 cd TRANSLATION-BRIDGE
-
-# 2. ثبّت المتطلبات
-pip install -r requirements.txt
-
-# 3. شغّل
+python -m pip install -r requirements.txt
 python chat_bridge.py
 ```
 
-### بناء الـ EXE بنفسك
+### بناء ملف EXE
 
-```bash
+```powershell
 .\build.bat
-# الملف النهائي: dist/Translation Bridge.exe
 ```
 
-<br>
+سيُنشأ الملف في `dist/Translation Bridge.exe`.
 
-## ⚙️ المتطلبات
+## الإعدادات المهمة
 
-| المتطلب | التفاصيل |
-|:-------:|:--------:|
-| نظام التشغيل | Windows 10 / 11 |
-| Python | 3.10+ (للتشغيل من الكود) |
-| API Key | [OpenRouter](https://openrouter.ai/keys) (فيه باقة مجانية) |
+| الإعداد | الغرض |
+| --- | --- |
+| Model | تحديد نموذج OpenRouter المستخدم في الترجمة. |
+| Global hotkey | تغيير اختصار نافذة الترجمة السريعة. |
+| Source / target | تحديد اتجاه الترجمة. |
+| Auto action | `Copy` أو `Paste` أو `Send`. ابدأ بـ `Copy` إن لم تكن متأكداً. |
+| History | حفظ محلي اختياري للترجمات. |
+| Instant repeat cache | تسريع تكرار نفس الترجمة في الجلسة دون تخزينها على القرص. |
 
-<br>
+## بنية المشروع
 
-## 🔒 الخصوصية والأمان
+```text
+TRANSLATION-BRIDGE/
+├── chat_bridge.py             نقطة الدخول
+├── chat_bridge/               التطبيق ومحرك الترجمة وإعدادات ويندوز
+│   └── ui/                    الواجهة: الشاشة الرئيسية، الإعدادات، السجل، التنبيهات
+├── assets/                    العلامة والأيقونات
+├── docs/                      موقع GitHub Pages
+├── tests/                     اختبارات السلوك والمنطق
+├── build.bat                  بناء ملف EXE
+└── Translation Bridge.spec    وصف حزمة PyInstaller
+```
 
-- 🔑 مفاتيح الـ API تُحفظ محلياً في `%APPDATA%/TranslationBridge/`
-- 🚫 لا تتبع، لا تحليلات، لا بيانات تُرسل لأي طرف ثالث
-- 📡 النصوص تروح مباشرة للـ API وما تنحفظ
-- 🔓 مفتوح المصدر بالكامل
+## المساهمة
 
-<br>
+التحسينات والبلاغات مرحب بها. قبل فتح Pull Request، شغّل الاختبارات وتحقق من أن أي تعديل بصري ما زال متوافقاً مع نظام التصميم الهادئ المذكور أعلاه.
 
-## 🤝 تبي تساعد؟؟؟
+## الرخصة
 
-لو عندك فكرة أو لقيت بق، افتح Issue أو سوي Pull Request.
-
-<br>
-
-## 📄 الرخصة
-
-[MIT License](LICENSE)
-
-<br>
-
----
-
-<div align="center">
-
-⭐ **Star** the repo if you find it useful
-
-</div>
+[MIT](LICENSE)

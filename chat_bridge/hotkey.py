@@ -19,6 +19,7 @@ MOD_ALT = 0x0001
 MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
 MOD_WIN = 0x0008
+MOD_NOREPEAT = 0x4000
 
 # Virtual key codes for OEM keys
 _OEM_MAP = {
@@ -50,7 +51,9 @@ def parse_hotkey(hk: str) -> tuple[int, int]:
         elif p in _OEM_MAP:
             vk = _OEM_MAP[p]
         elif p.startswith('f') and p[1:].isdigit():
-            vk = 0x6F + int(p[1:])
+            number = int(p[1:])
+            if 1 <= number <= 24:
+                vk = 0x6F + number
     return mods, vk
 
 
@@ -121,8 +124,8 @@ class NativeHotkey:
         except Exception as e:
             self._fail(f"Hotkey '{hk_str}' could not be parsed: {e}")
             return
-        if not vk:
-            self._fail(f"Hotkey '{hk_str}' has no valid key.")
+        if not vk or not mods:
+            self._fail(f"Hotkey '{hk_str}' needs a modifier and a valid key.")
             return
 
         msg = ctypes.wintypes.MSG()
@@ -134,7 +137,7 @@ class NativeHotkey:
         # briefly instead of failing silently and leaving the app hotkey-less.
         registered = False
         for _ in range(25):
-            if user32.RegisterHotKey(None, 1, mods, vk):
+            if user32.RegisterHotKey(None, 1, mods | MOD_NOREPEAT, vk):
                 registered = True
                 break
             time.sleep(0.02)

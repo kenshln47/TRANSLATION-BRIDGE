@@ -34,7 +34,7 @@ class HistoryPanel:
 
         w = ctk.CTkToplevel(self._app)
         w.title("Translation History")
-        w.geometry("440x520")
+        w.geometry("480x560")
         w.resizable(False, True)
         w.attributes("-topmost", True)
         w.configure(fg_color=C.BG)
@@ -44,31 +44,34 @@ class HistoryPanel:
 
         # Center on screen
         w.update_idletasks()
-        x = (w.winfo_screenwidth() - 440) // 2
-        y = (w.winfo_screenheight() - 520) // 2
+        x = (w.winfo_screenwidth() - 480) // 2
+        y = (w.winfo_screenheight() - 560) // 2
         w.geometry(f"+{x}+{y}")
 
         # Header
         hdr = ctk.CTkFrame(w, fg_color="transparent")
-        hdr.pack(fill="x", padx=16, pady=(12, 8))
+        hdr.pack(fill="x", padx=22, pady=(20, 10))
 
         ctk.CTkLabel(
-            hdr, text="📜 TRANSLATION HISTORY",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
-            text_color=C.ACCENT,
+            hdr, text="TRANSLATION HISTORY",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text_color=C.PRIMARY,
         ).pack(side="left")
 
         ctk.CTkLabel(
-            hdr, text=f"{len(history)} translations",
+            hdr, text=f"{len(history)} SAVED",
             font=ctk.CTkFont(size=11), text_color=C.TEXT_DIM,
         ).pack(side="right")
 
-        ctk.CTkFrame(w, height=1, fg_color=C.SEP).pack(fill="x", padx=16)
+        ctk.CTkLabel(
+            w, text="Only shown when local history is enabled in Settings.",
+            font=ctk.CTkFont(family="Segoe UI", size=10), text_color=C.TEXT_DIM,
+        ).pack(anchor="w", padx=22, pady=(0, 12))
 
         if not history:
             ctk.CTkLabel(
-                w, text="No translations yet.\nUse the app to start translating!",
-                font=ctk.CTkFont(size=13), text_color=C.TEXT_DIM,
+                w, text="Nothing saved yet.\nHistory stays local to this computer.",
+                font=ctk.CTkFont(family="Segoe UI", size=13), text_color=C.TEXT_DIM,
             ).pack(expand=True)
             return
 
@@ -78,7 +81,7 @@ class HistoryPanel:
             scrollbar_button_color=C.BORDER,
             scrollbar_button_hover_color=C.PRIMARY,
         )
-        scroll.pack(fill="both", expand=True, padx=12, pady=8)
+        scroll.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         for i, entry in enumerate(history):
             self._build_entry(scroll, entry, i)
@@ -87,11 +90,11 @@ class HistoryPanel:
         """Build a single history entry card."""
         import pyperclip
 
-        card = ctk.CTkFrame(parent, fg_color=C.BG_CARD, corner_radius=10,
+        card = ctk.CTkFrame(parent, fg_color=C.BG_CARD, corner_radius=9,
                              border_width=1, border_color=C.BORDER)
-        card.pack(fill="x", pady=3)
+        card.pack(fill="x", pady=4)
 
-        # Top row: Arabic text + timestamp
+        # Original text and timestamp; labels remain language-neutral.
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(8, 2))
 
@@ -101,15 +104,15 @@ class HistoryPanel:
         ).pack(side="left")
 
         ar_text = entry.get("ar", "")
-        if len(ar_text) > 40:
-            ar_text = ar_text[:40] + "..."
+        if len(ar_text) > 44:
+            ar_text = ar_text[:44] + "…"
         ctk.CTkLabel(
             top, text=ar_text,
             font=ctk.CTkFont(size=10), text_color=C.TEXT_DIM,
             justify="right",
         ).pack(side="right")
 
-        # Bottom row: English translation + copy button
+        # Translation and a compact copy action.
         bot = ctk.CTkFrame(card, fg_color="transparent")
         bot.pack(fill="x", padx=10, pady=(0, 8))
 
@@ -117,20 +120,20 @@ class HistoryPanel:
         ctk.CTkLabel(
             bot, text=en_text,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-            text_color=C.ACCENT,
-            wraplength=300, justify="left",
+            text_color=C.TEXT_SOFT,
+            wraplength=330, justify="left",
         ).pack(side="left", fill="x", expand=True)
 
         def _copy(text=en_text):
             try:
                 pyperclip.copy(text)
-                logger.info(f"Copied from history: {text[:30]}")
+                logger.info("Copied a translation from history.")
             except Exception as e:
                 logger.warning(f"Failed to copy from history: {e}")
 
         ctk.CTkButton(
-            bot, text="📋", width=32, height=28, corner_radius=6,
-            font=ctk.CTkFont(size=12),
-            fg_color=C.BG_INPUT, hover_color=C.PRIMARY,
+            bot, text="COPY", width=48, height=28, corner_radius=6,
+            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
+            fg_color=C.BG_INPUT, hover_color=C.PRIMARY_DIM,
             text_color=C.TEXT, command=_copy,
         ).pack(side="right", padx=(4, 0))

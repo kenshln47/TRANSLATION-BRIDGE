@@ -1,6 +1,6 @@
 """
-Translation Bridge v8.0
-Multi-language translator via OpenRouter (Grok 4.1 Fast)
+Translation Bridge
+Multi-language translator via OpenRouter
 
 This file is a compatibility wrapper. The real code lives in the chat_bridge/ package.
 Run with: python chat_bridge.py  OR  python -m chat_bridge

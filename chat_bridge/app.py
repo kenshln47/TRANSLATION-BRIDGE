@@ -8,9 +8,11 @@ Main Application — ties together all modules.
 import ctypes
 import logging
 import os
+import queue
 import sys
 import threading
 import time
+from dataclasses import dataclass
 
 import customtkinter as ctk
 import pyperclip
@@ -26,6 +28,7 @@ from .constants import (
     DEFAULT_SOURCE, DEFAULT_TARGET,
     MODEL_OPTIONS, OPENROUTER_MODEL, DEFAULT_MODEL_LABEL,
     CONTEXT_MAX_EXCHANGES, CONTEXT_IDLE_MINUTES, CONTEXT_MAX_CHARS,
+    MAX_INPUT_CHARS, SOURCE_LANGUAGES,
 )
 from .translator import Translator
 from .hotkey import NativeHotkey
@@ -63,6 +66,26 @@ class MONITORINFO(ctypes.Structure):
                 ("rcWork", RECT), ("dwFlags", ctypes.c_ulong)]
 
 
+@dataclass(frozen=True)
+class TranslationRequest:
+    """Everything a background translation needs, frozen at submit time."""
+
+    request_id: int
+    text: str
+    source_text: str
+    custom_rules: str
+    game_mode: str
+    ai_tone: str
+    source_key: str
+    target_key: str
+    context: tuple[tuple[str, str], ...]
+    mode: str
+    target_hwnd: int | None
+    history_enabled: bool
+    cache_enabled: bool
+    cancel: threading.Event
+
+
 def _monitor_rect_from_handle(hmon):
     if hmon:
         mi = MONITORINFO()
@@ -92,6 +115,11 @@ class App(ctk.CTk):
 
     def __init__(self):
         super().__init__()
+        self._ui_events = queue.Queue()
+        self._closing = False
+        self._main_cancel = None
+        self._request_sequence = 0
+        self._active_request_id = 0
         self.translator = Translator()
         self.is_busy = False
         self.cfg = load_config()
@@ -102,7 +130,7 @@ class App(ctk.CTk):
         self.translator.set_model(
             MODEL_OPTIONS.get(self.cfg.get("model", DEFAULT_MODEL_LABEL), OPENROUTER_MODEL)
         )
-        self.send_mode = ctk.StringVar(value=self.cfg.get("mode", MODE_SEND))
+        self.send_mode = ctk.StringVar(value=self.cfg.get("mode", MODE_COPY))
         self._timer_id = None
         self._last_hwnd = None
         self._t0 = 0
@@ -117,21 +145,22 @@ class App(ctk.CTk):
         # Hotkey & Tray
         self._hotkey = NativeHotkey()
         self._tray = TrayManager(
-            on_restore=lambda: self.after(0, self._show_window),
-            on_quit=lambda: self.after(0, self.destroy),
+            on_restore=lambda: self._post_ui(self._show_window),
+            on_quit=lambda: self._post_ui(self.destroy),
         )
 
         self._setup_window()
 
         key = load_api_key()
         if key:
-            self.translator._init(key)
+            self.translator.configure_api_key(key)
             self._build_main()
             self._check_api()
         else:
             SetupScreen(self).build()
 
         self._poll_window()
+        self.after(25, self._drain_ui_events)
         self._register_hotkey(self.cfg.get("hotkey", DEFAULT_HOTKEY))
 
         self.protocol("WM_DELETE_WINDOW", self._hide_window)
@@ -144,9 +173,38 @@ class App(ctk.CTk):
         logger.info("Application initialized.")
 
     def destroy(self):
+        if self._closing:
+            return
+        self._closing = True
+        if self._main_cancel is not None:
+            self._main_cancel.set()
+        if self._popup_cancel is not None:
+            self._popup_cancel.set()
         self._hotkey.unregister()
         self._tray.stop()
+        self.translator.close()
         super().destroy()
+
+    def _post_ui(self, callback, *args):
+        """Safely transfer a worker result to Tk's main thread."""
+        if not self._closing:
+            self._ui_events.put((callback, args))
+
+    def _drain_ui_events(self):
+        """Run all queued worker results from the Tk event loop only."""
+        if self._closing:
+            return
+        while True:
+            try:
+                callback, args = self._ui_events.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                callback(*args)
+            except Exception:
+                logger.exception("Unhandled UI event")
+        if not self._closing:
+            self.after(25, self._drain_ui_events)
 
     # ── SYSTEM TRAY ──
 
@@ -165,15 +223,15 @@ class App(ctk.CTk):
         """Single place that binds the global hotkey and surfaces failures in the UI."""
         self._hotkey.register(
             hk_str,
-            lambda: self.after(0, self._show_quick_popup),
-            on_fail=lambda msg: self.after(0, self._hotkey_failed, msg),
+            lambda: self._post_ui(self._show_quick_popup),
+            on_fail=lambda msg: self._post_ui(self._hotkey_failed, msg),
         )
 
     def _hotkey_failed(self, msg: str):
         """Registration failed — tell the user instead of failing silently."""
         Toast.show(self, f"Hotkey failed: {msg}", style="error")
         if hasattr(self, "stat"):
-            self._status("⚠️ Hotkey inactive — set a new one in Settings", C.ERROR)
+            self._status("Hotkey inactive — set a new one in Settings", C.ERROR)
 
     # ── WINDOW ──
 
@@ -214,11 +272,21 @@ class App(ctk.CTk):
                 buf = ctypes.create_unicode_buffer(256)
                 user32.GetWindowTextW(h, buf, 256)
                 t = buf.value
-                if "Translation Bridge" not in t and "Quick Translate" not in t and t:
+                if t and not self._is_own_window(h):
                     self._last_hwnd = h
         except Exception:
             pass
-        self.after(500, self._poll_window)
+        if not self._closing:
+            self.after(500, self._poll_window)
+
+    @staticmethod
+    def _is_own_window(hwnd) -> bool:
+        """True for any window belonging to this process, including dialogs."""
+        if not hwnd or not user32.IsWindow(hwnd):
+            return False
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return pid.value == os.getpid()
 
     def _load_logo(self, size=(64, 64)):
         if HAS_PIL and os.path.exists(LOGO_FILE):
@@ -228,6 +296,13 @@ class App(ctk.CTk):
             except Exception as e:
                 logger.warning(f"Failed to load logo: {e}")
         return None
+
+    def _source_input_options(self):
+        """Return the right placeholder and direction for the selected source."""
+        source_key = self.cfg.get("source_lang", DEFAULT_SOURCE)
+        info = SOURCE_LANGUAGES.get(source_key)
+        placeholder = info[1] if info else "Type your message..."
+        return placeholder, "right" if "العربية" in source_key else "left"
 
     # ── QUICK POPUP (Hotkey) ──
 
@@ -242,13 +317,16 @@ class App(ctk.CTk):
 
         # Fresh cancel token for this popup's lifetime
         self._popup_cancel = cancel_flag = threading.Event()
+        # The hotkey was pressed while this was the active non-app window.
+        # Keep that exact target; never infer a new target after translating.
+        target_hwnd = self._last_hwnd
 
         # Warm the API connection while the user types (zero-token, best-effort)
         threading.Thread(target=self.translator.warm, daemon=True).start()
 
         p = ctk.CTkToplevel(self)
         p.title("Quick Translate")
-        p.geometry("420x60")
+        p.geometry("460x68")
         p.resizable(False, False)
         p.attributes("-topmost", True)
         p.overrideredirect(True)
@@ -260,35 +338,36 @@ class App(ctk.CTk):
         # mouse's monitor, then the primary monitor.
         p.update_idletasks()
         mon_rect = (
-            _get_monitor_from_window(self._last_hwnd)
+            _get_monitor_from_window(target_hwnd)
             or _get_monitor_from_point(self.winfo_pointerx(), self.winfo_pointery())
         )
         if mon_rect:
             m_left, m_top, m_right, m_bottom = mon_rect
-            x = m_left + ((m_right - m_left) - 420) // 2
+            x = m_left + ((m_right - m_left) - 460) // 2
             y = m_bottom - 140
         else:
-            x = (self.winfo_screenwidth() - 420) // 2
+            x = (self.winfo_screenwidth() - 460) // 2
             y = self.winfo_screenheight() - 140
         p.geometry(f"+{x}+{y}")
 
         # Border effect
-        border = ctk.CTkFrame(p, fg_color=C.PRIMARY, corner_radius=12)
+        border = ctk.CTkFrame(p, fg_color=C.BORDER, corner_radius=10)
         border.pack(fill="both", expand=True, padx=1, pady=1)
-        inner = ctk.CTkFrame(border, fg_color=C.BG_CARD, corner_radius=11)
+        inner = ctk.CTkFrame(border, fg_color=C.BG_CARD, corner_radius=9)
         inner.pack(fill="both", expand=True, padx=1, pady=1)
 
-        logo = self._load_logo(size=(28, 28))
+        logo = self._load_logo(size=(30, 30))
         if logo:
             ctk.CTkLabel(inner, text="", image=logo).pack(side="left", padx=(10, 4), pady=8)
 
+        placeholder, justify = self._source_input_options()
         entry = ctk.CTkEntry(
-            inner, placeholder_text="...اكتب عربي واضغط Enter",
+            inner, placeholder_text=placeholder,
             font=ctk.CTkFont(family="Segoe UI", size=13),
-            height=36, corner_radius=8,
-            border_color=C.PRIMARY, border_width=2,
+            height=42, corner_radius=7,
+            border_color=C.BORDER, border_width=1,
             fg_color=C.BG_INPUT, text_color=C.TEXT,
-            justify="right",
+            justify=justify,
         )
         entry.pack(side="left", fill="x", expand=True, padx=4, pady=8)
 
@@ -318,10 +397,19 @@ class App(ctk.CTk):
             if not txt:
                 _close()
                 return
+            if len(txt) > MAX_INPUT_CHARS:
+                status_lbl.pack(side="right", padx=(0, 10))
+                status_lbl.configure(
+                    text=f"❌ Text is too long (max {MAX_INPUT_CHARS} characters)",
+                    text_color=C.ERROR,
+                )
+                p.after(2000, _close)
+                Toast.show(self, f"Translation failed: text is too long", style="error")
+                return
             busy["v"] = True
             entry.configure(state="disabled")
             status_lbl.pack(side="right", padx=(0, 10))
-            status_lbl.configure(text="⏳")
+            status_lbl.configure(text="WORKING", text_color=C.ACCENT)
 
             def _handle_error(msg):
                 if cancel_flag.is_set():
@@ -333,7 +421,17 @@ class App(ctk.CTk):
 
             original_text = txt
             # Snapshot session context on the main thread (Tk event handler)
-            ctx = self._session_context()
+            ctx = tuple(self._session_context())
+            request_cfg = {
+                "custom_rules": self.cfg.get("custom_rules", ""),
+                "game": self.cfg.get("game", "General"),
+                "tone": self.cfg.get("tone", "Gamer (Default)"),
+                "source_lang": self.cfg.get("source_lang", DEFAULT_SOURCE),
+                "target_lang": self.cfg.get("target_lang", DEFAULT_TARGET),
+                "history_enabled": self.cfg.get("history_enabled", False),
+                "cache_enabled": self.cfg.get("performance_cache_enabled", True),
+            }
+            mode = self.send_mode.get()
 
             started = {"v": False}
 
@@ -352,65 +450,73 @@ class App(ctk.CTk):
             def _finish(result):
                 if cancel_flag.is_set():
                     return
-                # Main thread: clipboard, history file I/O, session memory, then paste
-                self._safe_copy(result)
-                self._history = add_history_entry(
-                    original_text, result, self._history, MAX_HISTORY_ITEMS
-                )
+                if result.startswith("["):
+                    _handle_error(result.strip("[]"))
+                    return
+                # Never paste after a clipboard failure: Ctrl+V might otherwise
+                # send the user's previous, possibly sensitive clipboard value.
+                if not self._safe_copy(result):
+                    _handle_error("Could not copy translation to clipboard")
+                    return
+                if request_cfg["history_enabled"]:
+                    self._history = add_history_entry(
+                        original_text, result, self._history, MAX_HISTORY_ITEMS
+                    )
                 self._session_add(original_text, result)
-                _paste_and_close(result)
+                _paste_and_close(result, mode)
 
             def _do():
                 def on_token(tok):
-                    self.after(0, _show_token, tok)
+                    self._post_ui(_show_token, tok)
 
                 def on_done(result):
-                    self.after(0, _finish, result)
+                    self._post_ui(_finish, result)
 
                 def on_error(msg):
-                    self.after(0, lambda: _handle_error(msg))
+                    self._post_ui(_handle_error, msg)
 
                 self.translator.stream(
                     txt,
-                    custom_rules=self.cfg.get("custom_rules", ""),
-                    game_mode=self.cfg.get("game", "General"),
-                    ai_tone=self.cfg.get("tone", "Gamer (Default)"),
-                    source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
-                    target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
+                    custom_rules=request_cfg["custom_rules"],
+                    game_mode=request_cfg["game"],
+                    ai_tone=request_cfg["tone"],
+                    source_key=request_cfg["source_lang"],
+                    target_key=request_cfg["target_lang"],
                     context=ctx, cancel=cancel_flag,
+                    cache_enabled=bool(request_cfg["cache_enabled"]),
                     on_token=on_token, on_done=on_done, on_error=on_error
                 )
 
             threading.Thread(target=_do, daemon=True).start()
 
-        def _paste_and_close(result):
-            mode = self.send_mode.get()
+        def _paste_and_close(result, mode):
             if not p.winfo_exists():
-                # Still show toast even if popup already closed
-                Toast.show(self, f"✅ {result[:40]}", style="success")
+                # Closing the popup means the user cancelled the action.
                 return
             p.destroy()
             self._hotkey_popup = None
 
             if mode == MODE_COPY:
                 # Return focus to the previously active window
-                if self._last_hwnd and user32.IsWindow(self._last_hwnd):
-                    user32.SetForegroundWindow(self._last_hwnd)
+                self._focus_target_window(target_hwnd)
                 Toast.show(self, "Copied to clipboard ✅", style="success")
                 return
 
             def _do_paste_send():
-                # Trimmed but not removed: the game needs a beat to regain focus
-                # after the popup destroys itself, or the paste lands nowhere.
+                # Let the destroyed popup relinquish focus, then verify the exact
+                # target captured when the hotkey was pressed before injecting keys.
                 time.sleep(0.06)
+                if not self._focus_target_window(target_hwnd):
+                    self._post_ui(self._paste_failed, "Target window is no longer available")
+                    return
                 self._release_all_modifiers()
                 time.sleep(0.03)
                 self._kb_ctrl_v()
                 if mode == MODE_SEND:
                     time.sleep(0.06)
                     self._kb_enter()
-                # Show toast after paste/send
-                self.after(0, lambda: Toast.show(self, "Sent ✅", style="success"))
+                label = "Sent ✅" if mode == MODE_SEND else "Pasted ✅"
+                self._post_ui(Toast.show, self, label, "success")
 
             threading.Thread(target=_do_paste_send, daemon=True).start()
 
@@ -426,190 +532,251 @@ class App(ctk.CTk):
     # ═══════════════════════════════════════════════════════════
 
     def _build_main(self):
-        m = ctk.CTkFrame(self, fg_color="transparent")
-        m.pack(fill="both", expand=True, padx=24, pady=24)
-        self.main = m
+        page = ctk.CTkFrame(self, fg_color="transparent")
+        page.pack(fill="both", expand=True, padx=18, pady=18)
+        self.main = page
 
-        # ── HEADER ──
-        hdr = ctk.CTkFrame(m, fg_color="transparent")
-        hdr.pack(fill="x", pady=(0, 20))
+        shell = ctk.CTkFrame(
+            page, fg_color=C.BG_CARD, corner_radius=20,
+            border_width=1, border_color=C.BORDER,
+        )
+        shell.pack(fill="both", expand=True)
 
+        # The rail contains the persistent controls. It keeps the work area calm
+        # and makes the app feel like a focused tool rather than a busy dashboard.
+        rail = ctk.CTkFrame(shell, width=210, fg_color=C.BG_RAISED, corner_radius=18)
+        rail.pack(side="left", fill="y", padx=(1, 10), pady=1)
+        rail.pack_propagate(False)
+
+        brand = ctk.CTkFrame(rail, fg_color="transparent")
+        brand.pack(fill="x", padx=20, pady=(22, 18))
         logo = self._load_logo(size=(42, 42))
         if logo:
-            ctk.CTkLabel(hdr, text="", image=logo).pack(side="left", padx=(0, 12))
-
-        title_frame = ctk.CTkFrame(hdr, fg_color="transparent")
-        title_frame.pack(side="left", fill="y")
+            ctk.CTkLabel(brand, text="", image=logo).pack(side="left", padx=(0, 10))
+        brand_words = ctk.CTkFrame(brand, fg_color="transparent")
+        brand_words.pack(side="left", fill="y")
         ctk.CTkLabel(
-            title_frame, text="Translation Bridge",
-            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
-            text_color=C.ACCENT,
+            brand_words, text="BRIDGE",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=C.TEXT,
         ).pack(anchor="w")
+        ctk.CTkLabel(
+            brand_words, text="LIVE TRANSLATION",
+            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
+            text_color=C.PRIMARY,
+        ).pack(anchor="w", pady=(1, 0))
+
+        ctk.CTkFrame(rail, height=1, fg_color=C.SEP).pack(fill="x", padx=20)
+        ctk.CTkLabel(
+            rail, text="AUTO ACTION",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color=C.TEXT_DIM,
+        ).pack(anchor="w", padx=20, pady=(22, 8))
+
+        self.mode_map = [MODE_COPY, MODE_PASTE, MODE_SEND]
+        self.seg_btn = ctk.CTkSegmentedButton(
+            rail, values=["Copy", "Paste", "Send"],
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            height=34, corner_radius=7, fg_color=C.BG, selected_color=C.PRIMARY,
+            selected_hover_color=C.PRIMARY_H, unselected_color=C.BG,
+            unselected_hover_color=C.BG_CARD, text_color=C.TEXT,
+            command=self._seg_changed,
+        )
+        self.seg_btn.pack(fill="x", padx=20)
+        try:
+            init_idx = self.mode_map.index(self.cfg.get("mode", MODE_COPY))
+            self.seg_btn.set(["Copy", "Paste", "Send"][init_idx])
+        except ValueError:
+            self.seg_btn.set("Copy")
+
+        initial_mode_notes = {
+            MODE_COPY: "Copies the result only.",
+            MODE_PASTE: "Pastes into the saved game window.",
+            MODE_SEND: "Pastes and sends to the saved game window.",
+        }
+        self._mode_note = ctk.CTkLabel(
+            rail, text=initial_mode_notes.get(self.send_mode.get(), "Copies the result only."),
+            wraplength=166, justify="left",
+            font=ctk.CTkFont(family="Segoe UI", size=10), text_color=C.TEXT_DIM,
+        )
+        self._mode_note.pack(anchor="w", padx=20, pady=(8, 22))
+
+        quick = ctk.CTkFrame(
+            rail, fg_color=C.BG, corner_radius=10, border_width=1, border_color=C.BORDER,
+        )
+        quick.pack(fill="x", padx=20)
+        ctk.CTkLabel(
+            quick, text="QUICK TRANSLATE",
+            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"), text_color=C.TEXT_DIM,
+        ).pack(anchor="w", padx=12, pady=(11, 2))
+        self._hotkey_label = ctk.CTkLabel(
+            quick, text=self.cfg.get("hotkey", DEFAULT_HOTKEY).upper(),
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=C.TEXT,
+        )
+        self._hotkey_label.pack(anchor="w", padx=12, pady=(0, 11))
+
+        utility = ctk.CTkFrame(rail, fg_color="transparent")
+        utility.pack(side="bottom", fill="x", padx=20, pady=20)
+        ctk.CTkButton(
+            utility, text="HISTORY", height=34, corner_radius=7,
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color="transparent", hover_color=C.BG_CARD, text_color=C.TEXT_SOFT,
+            border_width=1, border_color=C.BORDER, command=self._history_panel.toggle,
+        ).pack(fill="x", pady=(0, 7))
+        ctk.CTkButton(
+            utility, text="SETTINGS", height=34, corner_radius=7,
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color="transparent", hover_color=C.BG_CARD, text_color=C.TEXT_SOFT,
+            border_width=1, border_color=C.BORDER, command=lambda: SettingsDialog(self).show(),
+        ).pack(fill="x")
+
+        work = ctk.CTkFrame(shell, fg_color="transparent")
+        work.pack(side="left", fill="both", expand=True, padx=(14, 22), pady=22)
+
+        top = ctk.CTkFrame(work, fg_color="transparent")
+        top.pack(fill="x", pady=(0, 14))
+        heading = ctk.CTkFrame(top, fg_color="transparent")
+        heading.pack(side="left")
+        ctk.CTkLabel(
+            heading, text="TRANSLATION DESK",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=C.PRIMARY,
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            heading, text="Write it once. Keep playing.",
+            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"), text_color=C.TEXT,
+        ).pack(anchor="w", pady=(2, 0))
+
+        state = ctk.CTkFrame(top, fg_color=C.PRIMARY_DIM, corner_radius=999)
+        state.pack(side="right", pady=(5, 0))
+        ctk.CTkLabel(
+            state, text="  READY  ", font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
+            text_color=C.ACCENT,
+        ).pack(padx=8, pady=5)
+
+        language_card = ctk.CTkFrame(
+            work, fg_color=C.BG_RAISED, corner_radius=10,
+            border_width=1, border_color=C.BORDER,
+        )
+        language_card.pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(
+            language_card, text="LANGUAGE ROUTE",
+            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"), text_color=C.TEXT_DIM,
+        ).pack(anchor="w", padx=14, pady=(10, 0))
         src = self.cfg.get("source_lang", DEFAULT_SOURCE)
         tgt = self.cfg.get("target_lang", DEFAULT_TARGET)
         self._lang_label = ctk.CTkLabel(
-            title_frame, text=f"{src} → {tgt}",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            text_color=C.TEXT_DIM,
+            language_card, text=f"{src}  →  {tgt}",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=C.TEXT,
         )
-        self._lang_label.pack(anchor="w", pady=(0, 0))
+        self._lang_label.pack(anchor="w", padx=14, pady=(1, 10))
 
-        # Header buttons
-        btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
-        btn_frame.pack(side="right")
-
-        ctk.CTkButton(
-            btn_frame, text="📜", width=40, height=40, corner_radius=9999,
-            font=ctk.CTkFont(size=16), fg_color=C.BG_CARD,
-            hover_color=C.BORDER, text_color=C.TEXT,
-            border_width=1, border_color=C.BORDER,
-            command=self._history_panel.toggle,
-        ).pack(side="left", padx=(0, 6))
-
-        ctk.CTkButton(
-            btn_frame, text="SETTINGS", width=40, height=40, corner_radius=9999,
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            fg_color=C.BG_CARD, hover_color=C.BORDER, text_color=C.TEXT,
-            border_width=1, border_color=C.BORDER,
-            command=lambda: SettingsDialog(self).show(),
-        ).pack(side="left")
-
-        # ── MAIN CARD ──
-        card = ctk.CTkFrame(m, fg_color=C.BG_CARD, corner_radius=16,
-                             border_width=1, border_color=C.BORDER)
-        card.pack(fill="both", expand=True, pady=(0, 20))
-
-        # ── INPUT ──
-        src = self.cfg.get("source_lang", DEFAULT_SOURCE)
+        composer = ctk.CTkFrame(
+            work, fg_color=C.BG, corner_radius=12, border_width=1, border_color=C.BORDER,
+        )
+        composer.pack(fill="x", pady=(0, 12))
+        source_head = ctk.CTkFrame(composer, fg_color="transparent")
+        source_head.pack(fill="x", padx=14, pady=(13, 6))
         self._input_label = ctk.CTkLabel(
-            card, text=f"INPUT — {src}",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=C.TEXT_DIM,
+            source_head, text=f"INPUT · {src}",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), text_color=C.TEXT_DIM,
         )
-        self._input_label.pack(anchor="w", padx=20, pady=(20, 8))
-
-        irow = ctk.CTkFrame(card, fg_color="transparent")
-        irow.pack(fill="x", padx=20, pady=(0, 16))
-
-        self.inp = ctk.CTkEntry(
-            irow, placeholder_text="اكتب جملتك هنا...",
-            font=ctk.CTkFont(family="Segoe UI", size=16),
-            height=54, corner_radius=12,
-            border_color=C.BORDER, border_width=1,
-            fg_color=C.BG_INPUT, text_color=C.TEXT, justify="right",
-        )
-        self.inp.pack(side="left", fill="x", expand=True, padx=(0, 12))
-        self.inp.bind("<Return>", lambda e: self._translate())
-
-        ctk.CTkButton(
-            irow, text="PASTE", width=54, height=54, corner_radius=12,
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            fg_color=C.BG_INPUT, hover_color=C.PRIMARY,
-            border_color=C.BORDER, border_width=1, text_color=C.TEXT,
-            command=self._paste_translate,
+        self._input_label.pack(side="left")
+        ctk.CTkLabel(
+            source_head, text="ENTER TO TRANSLATE",
+            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"), text_color=C.TEXT_DIM,
         ).pack(side="right")
 
+        input_row = ctk.CTkFrame(composer, fg_color="transparent")
+        input_row.pack(fill="x", padx=14, pady=(0, 10))
+        placeholder, justify = self._source_input_options()
+        self.inp = ctk.CTkEntry(
+            input_row, placeholder_text=placeholder,
+            font=ctk.CTkFont(family="Segoe UI", size=15), height=46, corner_radius=8,
+            border_color=C.BORDER, border_width=1, fg_color=C.BG_INPUT,
+            text_color=C.TEXT, justify=justify,
+        )
+        self.inp.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.inp.bind("<Return>", lambda e: self._translate())
+        ctk.CTkButton(
+            input_row, text="PASTE", width=66, height=46, corner_radius=8,
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color=C.BG_RAISED, hover_color=C.PRIMARY_DIM, border_width=1,
+            border_color=C.BORDER, text_color=C.TEXT, command=self._paste_translate,
+        ).pack(side="right")
+        self._translate_idle_label = "TRANSLATE"
         self.tr_btn = ctk.CTkButton(
-            card, text="TRANSLATE",
-            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
-            height=50, corner_radius=9999,
-            fg_color=C.PRIMARY, hover_color=C.PRIMARY_H,
+            composer, text=self._translate_idle_label,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            height=42, corner_radius=8, fg_color=C.PRIMARY, hover_color=C.PRIMARY_H,
             text_color=C.BG, command=self._translate,
         )
-        self.tr_btn.pack(fill="x", padx=20, pady=(0, 20))
+        self.tr_btn.pack(fill="x", padx=14, pady=(0, 14))
 
-        ctk.CTkFrame(card, height=1, fg_color=C.BORDER).pack(fill="x")
-
-        # ── PREVIEW ──
-        tgt = self.cfg.get("target_lang", DEFAULT_TARGET)
+        result = ctk.CTkFrame(
+            work, fg_color=C.BG, corner_radius=12, border_width=1, border_color=C.BORDER,
+        )
+        result.pack(fill="both", expand=True)
+        result_head = ctk.CTkFrame(result, fg_color="transparent")
+        result_head.pack(fill="x", padx=14, pady=(13, 6))
         self._output_label = ctk.CTkLabel(
-            card, text=f"OUTPUT — {tgt}",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=C.TEXT_DIM,
+            result_head, text=f"OUTPUT · {tgt}",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), text_color=C.TEXT_DIM,
         )
-        self._output_label.pack(anchor="w", padx=20, pady=(16, 8))
-
-        self.preview = ctk.CTkTextbox(
-            card, height=90, font=ctk.CTkFont(family="Segoe UI", size=15),
-            corner_radius=12, fg_color=C.BG_INPUT, text_color=C.ACCENT,
-            border_color=C.BORDER, border_width=1,
-            state="disabled", wrap="word",
-        )
-        self.preview.pack(fill="x", padx=20, pady=(0, 20))
-
-        # Clipboard confirmation label
+        self._output_label.pack(side="left")
         self.cp_lbl = ctk.CTkLabel(
-            card, text="", font=ctk.CTkFont(size=10), text_color=C.SUCCESS,
+            result_head, text="", font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
+            text_color=C.SUCCESS,
         )
-        self.cp_lbl.pack(anchor="w", padx=20, pady=(0, 4))
-
-        # ── SEND MODE & MANUAL SEND ──
-        mode_frame = ctk.CTkFrame(m, fg_color="transparent")
-        mode_frame.pack(fill="x")
-
-        ctk.CTkLabel(
-            mode_frame, text="AUTO ACTION",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=C.TEXT_DIM,
-        ).pack(anchor="w", pady=(0, 8))
-
-        self.mode_map = ["copy", "paste", "paste_send"]
-        self.seg_btn = ctk.CTkSegmentedButton(
-            mode_frame, values=["Copy", "Paste", "Send"],
-            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            height=40, corner_radius=9999,
-            fg_color=C.BG_CARD, selected_color=C.PRIMARY,
-            selected_hover_color=C.PRIMARY_H,
-            unselected_color=C.BG_CARD, unselected_hover_color=C.BG_INPUT,
-            command=self._seg_changed,
+        self.cp_lbl.pack(side="right")
+        self.preview = ctk.CTkTextbox(
+            result, height=102, font=ctk.CTkFont(family="Segoe UI", size=14),
+            corner_radius=8, fg_color=C.BG_INPUT, text_color=C.TEXT_SOFT,
+            border_color=C.BORDER, border_width=1, state="disabled", wrap="word",
         )
-        self.seg_btn.pack(fill="x", pady=(0, 16))
-
-        try:
-            init_idx = self.mode_map.index(self.cfg.get("mode", MODE_SEND))
-            self.seg_btn.set(["Copy", "Paste", "Send"][init_idx])
-        except Exception:
-            self.seg_btn.set("Send")
-
+        self.preview.pack(fill="both", expand=True, padx=14, pady=(0, 10))
         self.send_btn = ctk.CTkButton(
-            m, text="COPY & PASTE TO GAME",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
-            height=46, corner_radius=9999,
-            fg_color=C.BG_INPUT, hover_color=C.PRIMARY,
-            border_color=C.BORDER, border_width=1,
-            text_color=C.TEXT, command=self._manual_send, state="disabled",
+            result, text="PASTE RESULT TO GAME",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), height=38,
+            corner_radius=8, fg_color=C.BG_RAISED, hover_color=C.PRIMARY_DIM,
+            border_color=C.BORDER, border_width=1, text_color=C.TEXT,
+            command=self._manual_send, state="disabled",
         )
-        self.send_btn.pack(fill="x", pady=(0, 16))
+        self.send_btn.pack(fill="x", padx=14, pady=(0, 14))
 
-        # ── STATUS BAR ──
         self.stat = ctk.CTkLabel(
-            m, text=f"Ready • Hotkey: {self.cfg.get('hotkey', DEFAULT_HOTKEY).upper()}",
-            font=ctk.CTkFont(family="Source Code Pro", size=11),
-            text_color=C.TEXT_DIM,
+            work, text=f"Ready · hotkey {self.cfg.get('hotkey', DEFAULT_HOTKEY).upper()}",
+            font=ctk.CTkFont(family="Segoe UI", size=10), text_color=C.TEXT_DIM,
         )
-        self.stat.pack(anchor="center")
+        self.stat.pack(anchor="w", pady=(10, 0))
 
     def _seg_changed(self, value):
         idx = ["Copy", "Paste", "Send"].index(value)
         self.send_mode.set(self.mode_map[idx])
         self.cfg["mode"] = self.send_mode.get()
         save_config(self.cfg)
+        notes = {
+            MODE_COPY: "Copies the result only.",
+            MODE_PASTE: "Pastes into the saved game window.",
+            MODE_SEND: "Pastes and sends to the saved game window.",
+        }
+        if hasattr(self, "_mode_note"):
+            self._mode_note.configure(text=notes[self.send_mode.get()])
 
     # ── API CHECK ──
 
     def _check_api(self):
-        self.stat.configure(text="🟡 Testing Connection...", text_color=C.WARN)
+        self.stat.configure(text="Checking connection", text_color=C.WARN)
 
         def _c():
             ok, msg = self.translator.test()
-            self.after(0, self._api_ok, ok, msg)
+            self._post_ui(self._api_ok, ok, msg)
 
         threading.Thread(target=_c, daemon=True).start()
 
     def _api_ok(self, ok, msg):
         hk = self.cfg.get('hotkey', DEFAULT_HOTKEY).upper()
         if ok:
-            self.stat.configure(text=f"🟢 Ready • Hotkey: {hk}", text_color=C.TEXT_DIM)
+            self.stat.configure(text=f"Ready · hotkey {hk}", text_color=C.TEXT_DIM)
         else:
             self.stat.configure(text=msg, text_color=C.ERROR)
 
@@ -623,10 +790,10 @@ class App(ctk.CTk):
                 self.inp.insert(0, t.strip())
                 self._translate()
             else:
-                self._status("⚠️ Clipboard empty", C.WARN)
+                self._status("Clipboard is empty", C.WARN)
         except Exception as e:
             logger.warning(f"Failed to paste: {e}")
-            self._status("⚠️ Can't read clipboard", C.WARN)
+            self._status("Could not read the clipboard", C.WARN)
 
     # ── TRANSLATE ──
 
@@ -635,10 +802,32 @@ class App(ctk.CTk):
             return
         text = self.inp.get().strip()
         if not text:
-            self._status("⚠️ Type something", C.WARN)
+            self._status("Write something to translate", C.WARN)
             return
+        if len(text) > MAX_INPUT_CHARS:
+            self._status(f"Text is too long (max {MAX_INPUT_CHARS} characters)", C.WARN)
+            return
+        self._request_sequence += 1
+        request = TranslationRequest(
+            request_id=self._request_sequence,
+            text=text,
+            source_text=text,
+            custom_rules=self.cfg.get("custom_rules", ""),
+            game_mode=self.cfg.get("game", "General"),
+            ai_tone=self.cfg.get("tone", "Gamer (Default)"),
+            source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
+            target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
+            context=tuple(self._session_context()),
+            mode=self.send_mode.get(),
+            target_hwnd=self._last_hwnd,
+            history_enabled=bool(self.cfg.get("history_enabled", False)),
+            cache_enabled=bool(self.cfg.get("performance_cache_enabled", True)),
+            cancel=threading.Event(),
+        )
+        self._main_cancel = request.cancel
+        self._active_request_id = request.request_id
         self.is_busy = True
-        self.tr_btn.configure(state="disabled", text="⏳ Translating...")
+        self.tr_btn.configure(state="disabled", text="TRANSLATING")
         self.send_btn.configure(state="disabled")
         self.preview.configure(state="normal")
         self.preview.delete("1.0", "end")
@@ -646,14 +835,12 @@ class App(ctk.CTk):
         self._t0 = time.time()
         self._tick()
 
-        original_text = text
-        ctx = self._session_context()
-        threading.Thread(target=self._do_tr, args=(text, original_text, ctx), daemon=True).start()
+        threading.Thread(target=self._do_tr, args=(request,), daemon=True).start()
 
     def _tick(self):
         if not self.is_busy:
             return
-        self._status(f"⏳ Translating... ({time.time()-self._t0:.1f}s)", C.ACCENT)
+        self._status(f"Translating · {time.time()-self._t0:.1f}s", C.ACCENT)
         self._timer_id = self.after(200, self._tick)
 
     def _stop_tick(self):
@@ -661,127 +848,134 @@ class App(ctk.CTk):
             self.after_cancel(self._timer_id)
             self._timer_id = None
 
-    def _do_tr(self, text, original_text, ctx=None):
+    def _do_tr(self, request: TranslationRequest):
         self.translator.stream(
-            text,
-            custom_rules=self.cfg.get("custom_rules", ""),
-            game_mode=self.cfg.get("game", "General"),
-            ai_tone=self.cfg.get("tone", "Gamer (Default)"),
-            source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
-            target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
-            context=ctx,
-            on_token=lambda t: self.after(0, self._add_tok, t),
-            on_done=lambda r: self.after(0, self._done, r, original_text),
-            on_error=lambda e: self.after(0, self._fail, e),
+            request.text,
+            custom_rules=request.custom_rules,
+            game_mode=request.game_mode,
+            ai_tone=request.ai_tone,
+            source_key=request.source_key,
+            target_key=request.target_key,
+            context=request.context,
+            cancel=request.cancel,
+            cache_enabled=request.cache_enabled,
+            on_token=lambda t: self._post_ui(self._add_tok, request.request_id, t),
+            on_done=lambda r: self._post_ui(self._done, r, request),
+            on_error=lambda e: self._post_ui(self._fail, e, request.request_id),
         )
 
-    def _add_tok(self, t):
+    def _add_tok(self, request_id, t):
+        if request_id != self._active_request_id or not self.is_busy:
+            return
         self.preview.configure(state="normal")
         self.preview.insert("end", t)
         self.preview.see("end")
         self.preview.configure(state="disabled")
 
-    def _done(self, result, original_text=""):
+    def _done(self, result, request: TranslationRequest):
+        if request.request_id != self._active_request_id or request.cancel.is_set():
+            return
         self._stop_tick()
         self.is_busy = False
-        self.tr_btn.configure(state="normal", text="🔄  Translate")
+        self._main_cancel = None
+        self.tr_btn.configure(state="normal", text=self._translate_idle_label)
         elapsed = time.time() - self._t0
 
         if result.startswith("["):
-            self._status(f"❌ {result}", C.ERROR)
+            self._status(result, C.ERROR)
             return
 
         self._show_preview(result)
-        self._safe_copy(result)
+        if not self._safe_copy(result):
+            self._fail("Could not copy translation to clipboard", request.request_id)
+            return
         self.send_btn.configure(state="normal")
 
         # Save to history + session memory
-        if original_text:
+        if request.history_enabled and request.source_text:
             self._history = add_history_entry(
-                original_text, result, self._history, MAX_HISTORY_ITEMS
+                request.source_text, result, self._history, MAX_HISTORY_ITEMS
             )
-            self._session_add(original_text, result)
+        if request.source_text:
+            self._session_add(request.source_text, result)
 
-        mode = self.send_mode.get()
+        mode = request.mode
         if mode == MODE_COPY:
-            self._status(f"✅ Done ({elapsed:.1f}s) — clipboard", C.SUCCESS)
+            self._status(f"Ready in {elapsed:.1f}s · copied to clipboard", C.SUCCESS)
         elif mode == MODE_PASTE:
-            self._status(f"✅ Done ({elapsed:.1f}s) — pasting...", C.SUCCESS)
+            self._status(f"Ready in {elapsed:.1f}s · pasting", C.SUCCESS)
             self.iconify()
             self.update()
-            threading.Thread(target=self._do_paste, args=(result, False), daemon=True).start()
+            threading.Thread(target=self._do_paste, args=(result, False, request.target_hwnd), daemon=True).start()
         elif mode == MODE_SEND:
-            self._status(f"✅ Done ({elapsed:.1f}s) — sending...", C.SUCCESS)
+            self._status(f"Ready in {elapsed:.1f}s · sending", C.SUCCESS)
             self.iconify()
             self.update()
-            threading.Thread(target=self._do_paste, args=(result, True), daemon=True).start()
+            threading.Thread(target=self._do_paste, args=(result, True, request.target_hwnd), daemon=True).start()
 
-    def _fail(self, msg):
+    def _fail(self, msg, request_id=None):
+        if request_id is not None and request_id != self._active_request_id:
+            return
         self._stop_tick()
         self.is_busy = False
-        self.tr_btn.configure(state="normal", text="🔄  Translate")
-        self._status(f"❌ {msg}", C.ERROR)
+        self._main_cancel = None
+        self.tr_btn.configure(state="normal", text=self._translate_idle_label)
+        self._status(msg, C.ERROR)
         self._show_preview(f"[{msg}]")
 
     # ── AUTO-PASTE ──
 
-    def _do_paste(self, text, enter):
+    def _do_paste(self, text, enter, target_hwnd):
         time.sleep(0.05)
-        self._switch_win()
-        time.sleep(0.12)
+        if not self._focus_target_window(target_hwnd):
+            self._post_ui(self._paste_failed, "Target window changed; translation is only in your clipboard")
+            return
         self._release_all_modifiers()
         time.sleep(0.03)
-        self._safe_copy(text)
         self._kb_ctrl_v()
         if enter:
             time.sleep(0.05)
             self._kb_enter()
         time.sleep(0.05)
-        self.after(0, self._restore)
+        self._post_ui(self._restore, enter)
 
-    def _switch_win(self):
-        ok = False
+    def _focus_target_window(self, target_hwnd) -> bool:
+        """Focus one captured external window; never use unsafe Alt+Tab guessing."""
+        if not target_hwnd or self._is_own_window(target_hwnd):
+            return False
         k32 = ctypes.windll.kernel32
-        if self._last_hwnd:
+        try:
+            if not user32.IsWindow(target_hwnd):
+                return False
+            if user32.GetForegroundWindow() == target_hwnd:
+                return True
+            if user32.IsIconic(target_hwnd):
+                user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+            target_thread = user32.GetWindowThreadProcessId(target_hwnd, None)
+            current_thread = k32.GetCurrentThreadId()
+            user32.AttachThreadInput(current_thread, target_thread, True)
             try:
-                if user32.IsWindow(self._last_hwnd):
-                    if user32.IsIconic(self._last_hwnd):
-                        user32.ShowWindow(self._last_hwnd, 9)
-                        time.sleep(0.1)
-                    tt = user32.GetWindowThreadProcessId(self._last_hwnd, None)
-                    ct = k32.GetCurrentThreadId()
-                    user32.AttachThreadInput(ct, tt, True)
-                    try:
-                        user32.BringWindowToTop(self._last_hwnd)
-                        user32.SetForegroundWindow(self._last_hwnd)
-                    finally:
-                        user32.AttachThreadInput(ct, tt, False)
-                    time.sleep(0.1)
-                    if user32.GetForegroundWindow() == self._last_hwnd:
-                        ok = True
-            except Exception as e:
-                logger.warning(f"Failed to switch to target window: {e}")
-
-        if not ok:
-            UP = 0x0002
-            EXT = 0x0001
-            try:
-                user32.keybd_event(0x12, 0, EXT, 0)
-                user32.keybd_event(0x09, 0, 0, 0)
-                time.sleep(0.05)
-                user32.keybd_event(0x09, 0, UP, 0)
-                user32.keybd_event(0x12, 0, UP | EXT, 0)
-            except Exception as e:
-                logger.warning(f"Alt-Tab fallback failed: {e}")
+                user32.BringWindowToTop(target_hwnd)
+                user32.SetForegroundWindow(target_hwnd)
             finally:
-                user32.keybd_event(0x12, 0, UP | EXT, 0)
-            time.sleep(0.5)
+                user32.AttachThreadInput(current_thread, target_thread, False)
+            time.sleep(0.05)
+            return user32.GetForegroundWindow() == target_hwnd
+        except Exception as e:
+            logger.warning(f"Failed to focus target window: {e}")
+            return False
 
-    def _restore(self):
+    def _paste_failed(self, reason):
         self.deiconify()
         self.lift()
-        m = self.send_mode.get()
-        self._status("✅ Sent!" if m == MODE_SEND else "✅ Pasted!", C.SUCCESS)
+        self.send_btn.configure(state="normal", text="PASTE RESULT TO GAME")
+        self._status(reason, C.WARN)
+        self.inp.focus_set()
+
+    def _restore(self, enter):
+        self.deiconify()
+        self.lift()
+        self._status("Sent to game" if enter else "Pasted to game", C.SUCCESS)
         self.inp.delete(0, "end")
         self.cp_lbl.configure(text="")
         self.send_btn.configure(state="disabled")
@@ -794,32 +988,37 @@ class App(ctk.CTk):
         if not text:
             return
         enter = self.send_mode.get() == MODE_SEND
-        self.send_btn.configure(state="disabled", text="⏳...")
-        self._status("🔴 Switch to chat... 2s", C.ERROR)
+        target_hwnd = self._last_hwnd
+        if not self._safe_copy(text):
+            self._status("Could not copy the translation to clipboard", C.WARN)
+            return
+        self.send_btn.configure(state="disabled", text="PREPARING")
+        self._status("Switch to the game chat", C.WARN)
         self.iconify()
         self.update()
 
         def _s():
             time.sleep(0.3)
-            self._switch_win()
+            if not self._focus_target_window(target_hwnd):
+                self._post_ui(self._paste_failed, "Target window changed; translation is only in your clipboard")
+                return
             time.sleep(1.5)
             self._release_all_modifiers()
             time.sleep(0.05)
-            self._safe_copy(text)
             self._kb_ctrl_v()
             if enter:
                 time.sleep(0.2)
                 self._kb_enter()
             time.sleep(0.4)
-            self.after(0, self._manual_done)
+            self._post_ui(self._manual_done, enter)
 
         threading.Thread(target=_s, daemon=True).start()
 
-    def _manual_done(self):
+    def _manual_done(self, enter):
         self.deiconify()
         self.lift()
-        self.send_btn.configure(state="normal", text="📋  Copy & Paste to Chat")
-        self._status("✅ Done!", C.SUCCESS)
+        self.send_btn.configure(state="normal", text="PASTE RESULT TO GAME")
+        self._status("Sent to game" if enter else "Pasted to game", C.SUCCESS)
         self.inp.delete(0, "end")
         self.cp_lbl.configure(text="")
         self.send_btn.configure(state="disabled")
@@ -846,6 +1045,19 @@ class App(ctk.CTk):
         """Drop session context (e.g. after language/model change in settings)."""
         self._session_pairs = []
         self._session_ts = 0.0
+
+    def cancel_active_translation(self, reason="Cancelled"):
+        """Cancel a main-window request and ignore any late worker callbacks."""
+        if self._main_cancel is None:
+            return
+        self._main_cancel.set()
+        self._main_cancel = None
+        self._active_request_id += 1
+        if self.is_busy:
+            self._stop_tick()
+            self.is_busy = False
+            self.tr_btn.configure(state="normal", text=self._translate_idle_label)
+            self._status(reason, C.WARN)
 
     # ── HELPERS ──
 

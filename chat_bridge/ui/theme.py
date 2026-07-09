@@ -1,25 +1,28 @@
-"""
-Translation Bridge — Color Theme (Graphite + Emerald)
+"""Translation Bridge visual system.
+
+The product deliberately uses quiet, low-contrast surfaces with one restrained
+forest-green accent. It stays legible next to a game without becoming another
+neon game HUD.
 """
 
 
 class C:
-    """Application color palette — modern dark theme with proper elevation.
+    """Calm, practical palette shared by every application surface."""
 
-    Elevation goes page (darkest) → card → input (lighter), so surfaces read as
-    stacked depth instead of flat. Emerald brand accent is kept from the logo.
-    """
-    BG         = "#0c0e10"   # Page background — deep near-black
-    BG_CARD    = "#15181c"   # Elevated card — lighter than page = depth
-    BG_INPUT   = "#1b1f24"   # Input / button surface — lighter still, tactile
-    PRIMARY    = "#3ecf8e"   # Emerald brand (logo/banner green)
-    PRIMARY_H  = "#34b87d"   # Hover — slightly deeper green
-    ACCENT     = "#4ade94"   # Brighter emerald for accents/highlights on dark
-    ACCENT_H   = "#34b87d"
-    TEXT       = "#f2f4f5"   # Primary text — soft white
-    TEXT_DIM   = "#8b9398"   # Secondary / muted text
-    SUCCESS    = "#3ecf8e"   # Green
-    ERROR      = "#ff6b6b"   # Error / warning red
-    WARN       = "#ffd93d"   # Caution yellow
-    BORDER     = "#262b30"   # Visible-but-subtle border on cards
-    SEP        = "#1e2227"   # Hairline separator
+    BG          = "#101512"  # Ink green-black, easy on the eyes beside a game
+    BG_CARD     = "#192019"  # Main paper-like surface
+    BG_INPUT    = "#222B23"  # Controls are tactile, not glossy
+    BG_RAISED   = "#2A342B"  # Slightly elevated utility surface
+    PRIMARY     = "#9CCF78"  # Muted leaf green; the only brand colour
+    PRIMARY_H   = "#B4DD91"
+    ACCENT      = "#C9E7A9"
+    ACCENT_H    = "#D9F2BF"
+    PRIMARY_DIM = "#30482E"
+    TEXT        = "#F3F0E8"  # Warm white avoids a sterile pure-white screen
+    TEXT_DIM    = "#AAB2A8"
+    TEXT_SOFT   = "#D3D8CF"
+    SUCCESS     = "#9CCF78"
+    ERROR       = "#E58B7A"
+    WARN        = "#E6C777"
+    BORDER      = "#344037"
+    SEP         = "#29332B"

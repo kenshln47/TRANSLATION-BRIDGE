@@ -7,10 +7,14 @@ import logging
 import os
 import shutil
 import sys
+import tempfile
 import time
+import base64
+import ctypes
 
 from .constants import (
-    DEFAULT_HOTKEY, MODE_SEND, DEFAULT_SOURCE, DEFAULT_TARGET, DEFAULT_MODEL_LABEL,
+    DEFAULT_HOTKEY, MODE_COPY, MODE_PASTE, MODE_SEND,
+    DEFAULT_SOURCE, DEFAULT_TARGET, DEFAULT_MODEL_LABEL,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +42,72 @@ HISTORY_FILE = os.path.join(APP_DATA_DIR, "history.json")
 
 LOGO_FILE = os.path.join(ASSETS_DIR, "logo.png")
 ICON_FILE = os.path.join(ASSETS_DIR, "icon.ico")
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    """Write a text file atomically so an interrupted save keeps the old file."""
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix=".tmp-", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+
+
+class _DataBlob(ctypes.Structure):
+    _fields_ = [
+        ("cbData", ctypes.c_uint32),
+        ("pbData", ctypes.POINTER(ctypes.c_byte)),
+    ]
+
+
+def _protect_key(value: str) -> str:
+    """Encrypt an API key for the current Windows user with DPAPI."""
+    data = value.encode("utf-8")
+    if not data:
+        return ""
+    buffer = ctypes.create_string_buffer(data)
+    source = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)))
+    encrypted = _DataBlob()
+    crypt32 = ctypes.windll.crypt32
+    if not crypt32.CryptProtectData(
+        ctypes.byref(source), "Translation Bridge API key", None, None, None, 0,
+        ctypes.byref(encrypted),
+    ):
+        raise ctypes.WinError()
+    try:
+        raw = ctypes.string_at(encrypted.pbData, encrypted.cbData)
+        return "DPAPI:" + base64.b64encode(raw).decode("ascii")
+    finally:
+        ctypes.windll.kernel32.LocalFree(encrypted.pbData)
+
+
+def _unprotect_key(value: str) -> str:
+    """Decrypt a DPAPI protected API key for the current Windows user."""
+    if not value.startswith("DPAPI:"):
+        return value  # Legacy plaintext key; it will be migrated on next load.
+    data = base64.b64decode(value[6:].encode("ascii"), validate=True)
+    buffer = ctypes.create_string_buffer(data)
+    source = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)))
+    decrypted = _DataBlob()
+    crypt32 = ctypes.windll.crypt32
+    if not crypt32.CryptUnprotectData(
+        ctypes.byref(source), None, None, None, None, 0, ctypes.byref(decrypted),
+    ):
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(decrypted.pbData, decrypted.cbData).decode("utf-8")
+    finally:
+        ctypes.windll.kernel32.LocalFree(decrypted.pbData)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -74,8 +144,18 @@ _migrate_old_files()
 def load_api_key() -> str:
     if os.path.exists(API_KEY_FILE):
         try:
-            with open(API_KEY_FILE, "r") as f:
-                return f.read().strip()
+            with open(API_KEY_FILE, "r", encoding="utf-8") as f:
+                stored = f.read().strip()
+            key = _unprotect_key(stored)
+            # Transparently migrate the portable plaintext format after a
+            # successful read.  A failed migration must never prevent startup.
+            if key and not stored.startswith("DPAPI:"):
+                try:
+                    save_api_key(key)
+                    logger.info("Migrated API key to Windows DPAPI storage.")
+                except Exception as e:
+                    logger.warning(f"Failed to migrate API key encryption: {e}")
+            return key
         except Exception as e:
             logger.error(f"Failed to read API key file: {e}")
     return ""
@@ -83,11 +163,20 @@ def load_api_key() -> str:
 
 def save_api_key(k: str):
     try:
-        with open(API_KEY_FILE, "w") as f:
-            f.write(k.strip())
-        logger.info("API key saved.")
+        key = k.strip()
+        if not key:
+            try:
+                os.remove(API_KEY_FILE)
+            except FileNotFoundError:
+                pass
+            logger.info("API key removed.")
+            return True
+        _atomic_write_text(API_KEY_FILE, _protect_key(key))
+        logger.info("API key saved with Windows DPAPI protection.")
+        return True
     except Exception as e:
         logger.error(f"Failed to save API key: {e}")
+        return False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -96,13 +185,17 @@ def save_api_key(k: str):
 
 _DEFAULT_CONFIG = {
     "hotkey": DEFAULT_HOTKEY,
-    "mode": MODE_SEND,
+    # Auto-sending an LLM response into whichever window has focus is unsafe.
+    # Users can still opt into Paste or Send explicitly in the main UI.
+    "mode": MODE_COPY,
     "source_lang": DEFAULT_SOURCE,
     "target_lang": DEFAULT_TARGET,
     "game": "General",
     "tone": "Gamer (Default)",
     "custom_rules": "",
     "model": DEFAULT_MODEL_LABEL,
+    "history_enabled": False,
+    "performance_cache_enabled": True,
 }
 
 
@@ -111,8 +204,25 @@ def load_config() -> dict:
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
+                if not isinstance(loaded, dict):
+                    raise ValueError("Configuration root must be an object")
                 # Merge with defaults so new keys are always present
-                merged = {**_DEFAULT_CONFIG, **loaded}
+                merged = {
+                    **_DEFAULT_CONFIG,
+                    **{key: value for key, value in loaded.items() if key in _DEFAULT_CONFIG},
+                }
+                # Pre-privacy-release configurations defaulted to automatic
+                # Send. Move them to the safe mode once; users can opt back in.
+                if "history_enabled" not in loaded:
+                    merged["mode"] = MODE_COPY
+                for key, default in _DEFAULT_CONFIG.items():
+                    if key in ("history_enabled", "performance_cache_enabled"):
+                        if not isinstance(merged[key], bool):
+                            merged[key] = default
+                    elif not isinstance(merged[key], str):
+                        merged[key] = default
+                if merged["mode"] not in (MODE_COPY, MODE_PASTE, MODE_SEND):
+                    merged["mode"] = MODE_COPY
                 return merged
         except Exception as e:
             logger.warning(f"Failed to load config, using defaults: {e}")
@@ -121,10 +231,12 @@ def load_config() -> dict:
 
 def save_config(cfg: dict):
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        safe_cfg = {key: cfg.get(key, default) for key, default in _DEFAULT_CONFIG.items()}
+        _atomic_write_text(CONFIG_FILE, json.dumps(safe_cfg, ensure_ascii=False, indent=2))
+        return True
     except Exception as e:
         logger.error(f"Failed to save config: {e}")
+        return False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -138,7 +250,14 @@ def load_history() -> list:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return data
+                    cleaned = []
+                    for entry in data[:50]:
+                        if not isinstance(entry, dict):
+                            continue
+                        src, dst, ts = entry.get("ar"), entry.get("en"), entry.get("ts")
+                        if isinstance(src, str) and isinstance(dst, str) and isinstance(ts, str):
+                            cleaned.append({"ar": src, "en": dst, "ts": ts})
+                    return cleaned
         except Exception as e:
             logger.warning(f"Failed to load history: {e}")
     return []
@@ -146,10 +265,11 @@ def load_history() -> list:
 
 def save_history(history: list):
     try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+        _atomic_write_text(HISTORY_FILE, json.dumps(history, ensure_ascii=False, indent=2))
+        return True
     except Exception as e:
         logger.error(f"Failed to save history: {e}")
+        return False
 
 
 def add_history_entry(arabic: str, english: str, history: list, max_items: int = 50) -> list:
@@ -163,6 +283,19 @@ def add_history_entry(arabic: str, english: str, history: list, max_items: int =
     history = history[:max_items]
     save_history(history)
     return history
+
+
+def clear_history() -> bool:
+    """Remove locally retained translations at the user's request."""
+    try:
+        os.remove(HISTORY_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.error(f"Failed to clear history: {e}")
+        return False
+    logger.info("Translation history cleared.")
+    return True
 
 
 # ─────────────────────────────────────────────────────────────

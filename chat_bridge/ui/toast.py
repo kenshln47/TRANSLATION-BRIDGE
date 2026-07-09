@@ -35,18 +35,11 @@ class Toast:
                 pass
 
         colors = {
-            "success": (C.PRIMARY, C.BG),
-            "error":   (C.ERROR, "#ffffff"),
-            "info":    (C.BG_CARD, C.TEXT),
+            "success": C.PRIMARY,
+            "error": C.ERROR,
+            "info": C.BORDER,
         }
-        bg, fg = colors.get(style, colors["info"])
-
-        icons = {
-            "success": "✅",
-            "error": "❌",
-            "info": "ℹ️",
-        }
-        icon = icons.get(style, "")
+        accent = colors.get(style, colors["info"])
 
         toast = ctk.CTkToplevel(parent)
         toast.withdraw()  # hide until positioned
@@ -54,18 +47,18 @@ class Toast:
         toast.attributes("-topmost", True)
         toast.configure(fg_color=C.BG_CARD)
 
-        # Outer border glow
-        border = ctk.CTkFrame(toast, fg_color=bg, corner_radius=12)
+        # A quiet accent rule is clearer than a coloured notification block.
+        border = ctk.CTkFrame(toast, fg_color=accent, corner_radius=9)
         border.pack(fill="both", expand=True, padx=1, pady=1)
 
-        inner = ctk.CTkFrame(border, fg_color=C.BG_CARD, corner_radius=11)
+        inner = ctk.CTkFrame(border, fg_color=C.BG_CARD, corner_radius=8)
         inner.pack(fill="both", expand=True, padx=1, pady=1)
 
         label = ctk.CTkLabel(
             inner,
-            text=f"  {icon}  {message}  ",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-            text_color=bg,
+            text=message,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=C.TEXT,
         )
         label.pack(padx=16, pady=10)
 
@@ -89,7 +82,7 @@ class Toast:
         # Auto-dismiss
         toast.after(duration, lambda: cls._fade_out(toast, 1.0))
 
-        logger.debug(f"Toast shown: [{style}] {message}")
+        logger.debug("Toast shown: [%s]", style)
 
     @classmethod
     def _fade_in(cls, toast, alpha):

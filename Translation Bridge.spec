@@ -1,7 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
+from PIL import Image
 
-datas = [('assets/logo.png', 'assets')]
+# icon.ico is intentionally generated into the ignored build directory.  This
+# keeps a clean clone buildable without relying on an untracked binary asset.
+build_dir = Path('build')
+build_dir.mkdir(exist_ok=True)
+generated_icon = build_dir / 'translation-bridge.ico'
+with Image.open('assets/logo.png') as image:
+    image.save(generated_icon, format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
+
+datas = [('assets/logo.png', 'assets'), (str(generated_icon), 'assets')]
 binaries = []
 hiddenimports = ['PIL', 'chat_bridge']
 tmp_ret = collect_all('customtkinter')
@@ -46,5 +56,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets\\icon.ico'],
+    icon=[str(generated_icon)],
 )

@@ -25,66 +25,67 @@ class SetupScreen:
 
     def build(self):
         self.frame = ctk.CTkFrame(self._app, fg_color="transparent")
-        self.frame.pack(fill="both", expand=True, padx=20, pady=20)
+        self.frame.pack(fill="both", expand=True, padx=24, pady=24)
 
-        logo = self._app._load_logo(size=(80, 80))
-        if logo:
-            ctk.CTkLabel(self.frame, text="", image=logo).pack(pady=(20, 8))
-        else:
-            ctk.CTkLabel(self.frame, text="🌐", font=ctk.CTkFont(size=48)).pack(pady=(20, 8))
-
-        ctk.CTkLabel(
-            self.frame, text="Translation Bridge",
-            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
-            text_color=C.ACCENT,
-        ).pack(pady=(0, 2))
-
-        ctk.CTkLabel(
-            self.frame, text="Multi-language • Fast AI translation",
-            font=ctk.CTkFont(size=11), text_color=C.TEXT_DIM,
-        ).pack(pady=(0, 20))
-
-        ctk.CTkFrame(self.frame, height=1, fg_color=C.SEP).pack(fill="x", pady=(0, 16))
-
-        ctk.CTkLabel(
-            self.frame, text="🔑  OpenRouter API Key",
-            font=ctk.CTkFont(size=13, weight="bold"), text_color=C.TEXT,
-        ).pack(anchor="w", pady=(0, 2))
-
-        ctk.CTkLabel(
-            self.frame, text="openrouter.ai/keys",
-            font=ctk.CTkFont(size=10), text_color=C.TEXT_DIM,
-        ).pack(anchor="w", pady=(0, 8))
-
-        self.entry = ctk.CTkEntry(
-            self.frame, placeholder_text="sk-or-v1-...",
-            font=ctk.CTkFont(size=12), height=42, corner_radius=8,
-            border_color=C.PRIMARY, border_width=1,
-            fg_color=C.BG_INPUT, text_color=C.TEXT,
+        card = ctk.CTkFrame(
+            self.frame, width=430, fg_color=C.BG_CARD, corner_radius=18,
+            border_width=1, border_color=C.BORDER,
         )
-        self.entry.pack(fill="x", pady=(0, 6))
+        card.place(relx=0.5, rely=0.5, anchor="center")
 
+        logo = self._app._load_logo(size=(58, 58))
+        if logo:
+            ctk.CTkLabel(card, text="", image=logo).pack(pady=(28, 12))
+
+        ctk.CTkLabel(
+            card, text="WELCOME TO BRIDGE",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), text_color=C.PRIMARY,
+        ).pack()
+        ctk.CTkLabel(
+            card, text="One quiet place\nfor every language.",
+            font=ctk.CTkFont(family="Segoe UI", size=24, weight="bold"), text_color=C.TEXT,
+            justify="center",
+        ).pack(pady=(4, 10))
+        ctk.CTkLabel(
+            card, text="Add an OpenRouter key to start translating in-game.",
+            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=C.TEXT_DIM,
+        ).pack(pady=(0, 22))
+
+        key_area = ctk.CTkFrame(card, fg_color=C.BG, corner_radius=10)
+        key_area.pack(fill="x", padx=22)
+        ctk.CTkLabel(
+            key_area, text="OPENROUTER API KEY",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"), text_color=C.TEXT_DIM,
+        ).pack(anchor="w", padx=13, pady=(13, 4))
+        self.entry = ctk.CTkEntry(
+            key_area, placeholder_text="sk-or-v1-...", font=ctk.CTkFont(size=12),
+            height=40, corner_radius=7, border_color=C.BORDER, border_width=1,
+            fg_color=C.BG_INPUT, text_color=C.TEXT, show="•",
+        )
+        self.entry.pack(fill="x", padx=13, pady=(0, 8))
         ctk.CTkButton(
-            self.frame, text="Paste from clipboard",
-            height=30, corner_radius=9999, font=ctk.CTkFont(size=11),
-            fg_color=C.BG_CARD, hover_color=C.PRIMARY, text_color=C.ACCENT,
-            border_color=C.BORDER, border_width=1,
-            command=self._paste_key,
-        ).pack(fill="x", pady=(0, 12))
+            key_area, text="PASTE FROM CLIPBOARD", height=30, corner_radius=7,
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color="transparent", hover_color=C.BG_RAISED, text_color=C.TEXT_SOFT,
+            border_color=C.BORDER, border_width=1, command=self._paste_key,
+        ).pack(fill="x", padx=13, pady=(0, 13))
 
         self.status = ctk.CTkLabel(
-            self.frame, text="", font=ctk.CTkFont(size=10), text_color=C.TEXT_DIM,
+            card, text="Your key is encrypted on this computer.",
+            font=ctk.CTkFont(family="Segoe UI", size=10), text_color=C.TEXT_DIM,
         )
-        self.status.pack(pady=(0, 6))
-
+        self.status.pack(pady=(13, 8))
         self.btn = ctk.CTkButton(
-            self.frame, text="Connect & Start",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            height=46, corner_radius=9999,
-            fg_color=C.PRIMARY, hover_color=C.PRIMARY_H, text_color=C.BG,
-            command=self._on_connect,
+            card, text="CONNECT AND START",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            height=42, corner_radius=7, fg_color=C.PRIMARY, hover_color=C.PRIMARY_H,
+            text_color=C.BG, command=self._on_connect,
         )
-        self.btn.pack(fill="x")
+        self.btn.pack(fill="x", padx=22, pady=(0, 12))
+        ctk.CTkLabel(
+            card, text="You can change the model, languages, and hotkey later.",
+            font=ctk.CTkFont(family="Segoe UI", size=9), text_color=C.TEXT_DIM,
+        ).pack(pady=(0, 26))
 
     def _paste_key(self):
         try:
@@ -97,17 +98,17 @@ class SetupScreen:
     def _on_connect(self):
         key = self.entry.get().strip()
         if not key:
-            self.status.configure(text="⚠️ Enter a key", text_color=C.WARN)
+            self.status.configure(text="Enter an API key to continue", text_color=C.WARN)
             return
 
-        self.btn.configure(state="disabled", text="⏳ Testing...")
+        self.btn.configure(state="disabled", text="CHECKING CONNECTION")
         self.status.configure(text="Connecting...", text_color=C.ACCENT)
         logger.info("Testing API key...")
 
         def _test():
-            self._app.translator._init(key)
+            self._app.translator.configure_api_key(key)
             ok, msg = self._app.translator.test()
-            self._app.after(0, self._on_result, ok, msg, key)
+            self._app._post_ui(self._on_result, ok, msg, key)
 
         threading.Thread(target=_test, daemon=True).start()
 
@@ -117,7 +118,7 @@ class SetupScreen:
             save_api_key(key)
             self.frame.destroy()
             self._app._build_main()
-            self._app._check_api()
+            self._app._api_ok(True, msg)
             logger.info("Setup complete — API key validated.")
         else:
             self.btn.configure(state="normal", text="Connect & Start")
