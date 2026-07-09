@@ -17,23 +17,46 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">تجاوز إلى المحتوى</a>
+  <a class="skip-link" href="#main" data-i18n="skip">تجاوز إلى المحتوى</a>
 
   <header class="site-header" data-header>
     <div class="container nav">
+      <nav class="nav-links" id="site-nav" data-menu aria-label="التنقل الرئيسي">
+        <a href="#why" data-i18n="navWhy">الفكرة</a>
+        <a href="#flow" data-i18n="navFlow">كيف تعمل</a>
+        <a href="#privacy" data-i18n="navPrivacy">الخصوصية</a>
+        <a class="nav-github" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <div class="language-switcher">
+          <button class="language-button" type="button" aria-expanded="false" aria-controls="language-menu" data-language-toggle>
+            <span class="language-button__flag" data-language-flag>🇸🇦</span>
+            <span data-language-current>العربية (خليجي)</span>
+            <span class="language-button__chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="language-menu" id="language-menu" data-language-menu hidden>
+            <button type="button" data-language="ar-gulf">🇸🇦 العربية (خليجي)</button>
+            <button type="button" data-language="ar-standard">🇸🇦 العربية (فصحى)</button>
+            <button type="button" data-language="en">🇬🇧 English</button>
+            <button type="button" data-language="tr">🇹🇷 Türkçe</button>
+            <button type="button" data-language="es">🇪🇸 Español</button>
+            <button type="button" data-language="fr">🇫🇷 Français</button>
+            <button type="button" data-language="pt">🇧🇷 Português</button>
+            <button type="button" data-language="ru">🇷🇺 Русский</button>
+            <button type="button" data-language="de">🇩🇪 Deutsch</button>
+            <button type="button" data-language="ko">🇰🇷 한국어</button>
+            <button type="button" data-language="ja">🇯🇵 日本語</button>
+            <button type="button" data-language="hi">🇮🇳 हिंदी</button>
+            <button type="button" data-language="zh">🇨🇳 中文</button>
+            <button type="button" data-language="auto">🌐 Auto-detect</button>
+          </div>
+        </div>
+      </nav>
       <a class="brand" href="#top" aria-label="Translation Bridge">
         <img src="brand-mark.svg" width="36" height="36" alt="">
         <span>Translation Bridge</span>
       </a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
-        <span></span><span></span><span></span><span class="sr-only">فتح القائمة</span>
+        <span></span><span></span><span></span><span class="sr-only" data-i18n="menu">فتح القائمة</span>
       </button>
-      <nav class="nav-links" id="site-nav" data-menu>
-        <a href="#why">الفكرة</a>
-        <a href="#flow">كيف تعمل</a>
-        <a href="#privacy">الخصوصية</a>
-        <a class="nav-github" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">GitHub</a>
-      </nav>
     </div>
   </header>
 
@@ -41,17 +64,17 @@
     <section class="hero" id="top">
       <div class="container hero-grid">
         <div class="hero-copy reveal">
-          <p class="eyebrow"><span></span> ترجمة للمحادثة، لا للضجيج</p>
-          <h1>اكتب بطريقتك.<br><em>وخلك في اللعب.</em></h1>
-          <p class="hero-text">Translation Bridge يحوّل رسائلك إلى اللغة التي تحتاجها من نافذة خفيفة، مع تحكم واضح في النسخ واللصق والإرسال.</p>
+          <p class="eyebrow"><span></span> <span data-i18n="eyebrow">ترجمة للمحادثة، لا للضجيج</span></p>
+          <h1 data-i18n-html="heroTitle">اكتب بطريقتك.<br><em>وخلك في اللعب.</em></h1>
+          <p class="hero-text" data-i18n="heroText">Translation Bridge يحوّل رسائلك إلى اللغة التي تحتاجها من نافذة خفيفة، مع تحكم واضح في النسخ واللصق والإرسال.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" target="_blank" rel="noopener noreferrer">عرض الإصدارات <span aria-hidden="true">←</span></a>
-            <a class="text-link" href="#flow">شوف طريقة العمل <span aria-hidden="true">↓</span></a>
+            <a class="button button-primary" href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" target="_blank" rel="noopener noreferrer"><span data-i18n="release">عرض الإصدارات</span> <span aria-hidden="true">←</span></a>
+            <a class="text-link" href="#flow"><span data-i18n="seeFlow">شوف طريقة العمل</span> <span aria-hidden="true">↓</span></a>
           </div>
           <ul class="hero-notes" aria-label="مزايا أساسية">
-            <li>ويندوز</li>
-            <li>اختصار عالمي</li>
-            <li>وضع النسخ الآمن افتراضياً</li>
+            <li data-i18n="noteWindows">ويندوز</li>
+            <li data-i18n="noteHotkey">اختصار عالمي</li>
+            <li data-i18n="noteCopy">وضع النسخ الآمن افتراضياً</li>
           </ul>
         </div>
 
@@ -66,10 +89,10 @@
             </aside>
             <div class="mini-desk">
               <div class="mini-title"><span>TRANSLATION DESK</span><i>READY</i></div>
-              <h2>Write it once.<br>Keep playing.</h2>
-              <div class="route"><small>LANGUAGE ROUTE</small><strong>العربية <b>→</b> English</strong></div>
-              <div class="mini-card"><small>INPUT · العربية</small><p>شباب نروح للهدف؟</p><button>TRANSLATE</button></div>
-              <div class="mini-card output"><small>OUTPUT · English</small><p>Should we head to the objective?</p><button class="quiet">PASTE RESULT TO GAME</button></div>
+              <h2 data-i18n-html="deskTitle">Write it once.<br>Keep playing.</h2>
+              <div class="route"><small>LANGUAGE ROUTE</small><strong data-demo-route>العربية <b>→</b> English</strong></div>
+              <div class="mini-card"><small>INPUT</small><p data-demo-input>شباب نروح للهدف؟</p><button>TRANSLATE</button></div>
+              <div class="mini-card output"><small>OUTPUT</small><p data-demo-output>Should we head to the objective?</p><button class="quiet">PASTE RESULT TO GAME</button></div>
             </div>
           </div>
         </div>
@@ -79,52 +102,52 @@
 
     <section class="proof" aria-label="مبادئ المنتج">
       <div class="container proof-grid reveal">
-        <p><b>01</b> مصمم للمحادثة السريعة، لا للصفحات الطويلة.</p>
-        <p><b>02</b> أنت تختار متى تنسخ ومتى تلصق ومتى ترسل.</p>
-        <p><b>03</b> السياق قصير ومحدد حتى تبقى الاستجابة خفيفة.</p>
+        <p><b>01</b> <span data-i18n="proofOne">مصمم للمحادثة السريعة، لا للصفحات الطويلة.</span></p>
+        <p><b>02</b> <span data-i18n="proofTwo">أنت تختار متى تنسخ ومتى تلصق ومتى ترسل.</span></p>
+        <p><b>03</b> <span data-i18n="proofThree">السياق قصير ومحدد حتى تبقى الاستجابة خفيفة.</span></p>
       </div>
     </section>
 
     <section class="section" id="why">
       <div class="container split-heading reveal">
-        <p class="eyebrow">الفكرة</p>
-        <div><h2>الأشياء الصغيرة هي التي تحافظ على تركيزك.</h2><p>لذلك الواجهة لا تحاول أن تكون لعبة ثانية. هي مساحة هادئة بينك وبين الدردشة.</p></div>
+        <p class="eyebrow" data-i18n="whyEyebrow">الفكرة</p>
+        <div><h2 data-i18n="whyTitle">الأشياء الصغيرة هي التي تحافظ على تركيزك.</h2><p data-i18n="whyText">لذلك الواجهة لا تحاول أن تكون لعبة ثانية. هي مساحة هادئة بينك وبين الدردشة.</p></div>
       </div>
       <div class="container feature-grid">
-        <article class="feature reveal"><span>01</span><h3>اختصار في مكانه</h3><p>افتح نافذة ترجمة صغيرة فوق اللعبة، اكتب، ثم اختفِ منها مباشرة بعد إنهاء المهمة.</p></article>
-        <article class="feature reveal"><span>02</span><h3>ترجمة تفهم النبرة</h3><p>تستخدم الأداة سياقاً قصيراً وإعدادات للعبة والنبرة بدل ترجمة كلمة بكلمة.</p></article>
-        <article class="feature reveal"><span>03</span><h3>إرسال بحدود واضحة</h3><p>يُحفظ هدف الإرسال من لحظة بدء الطلب، ولا تُخمن الأداة نافذة أخرى إذا تغيّر التركيز.</p></article>
+        <article class="feature reveal"><span>01</span><h3 data-i18n="featureOneTitle">اختصار في مكانه</h3><p data-i18n="featureOneText">افتح نافذة ترجمة صغيرة فوق اللعبة، اكتب، ثم اختفِ منها مباشرة بعد إنهاء المهمة.</p></article>
+        <article class="feature reveal"><span>02</span><h3 data-i18n="featureTwoTitle">ترجمة تفهم النبرة</h3><p data-i18n="featureTwoText">تستخدم الأداة سياقاً قصيراً وإعدادات للعبة والنبرة بدل ترجمة كلمة بكلمة.</p></article>
+        <article class="feature reveal"><span>03</span><h3 data-i18n="featureThreeTitle">إرسال بحدود واضحة</h3><p data-i18n="featureThreeText">يُحفظ هدف الإرسال من لحظة بدء الطلب، ولا تُخمن الأداة نافذة أخرى إذا تغيّر التركيز.</p></article>
       </div>
     </section>
 
     <section class="section flow-section" id="flow">
       <div class="container flow-layout">
-        <div class="flow-intro reveal"><p class="eyebrow">خط سير بسيط</p><h2>ثلاث حركات،<br>وباقي الوقت للعب.</h2></div>
+        <div class="flow-intro reveal"><p class="eyebrow" data-i18n="flowEyebrow">خط سير بسيط</p><h2 data-i18n-html="flowTitle">ثلاث حركات،<br>وباقي الوقت للعب.</h2></div>
         <ol class="flow-list">
-          <li class="reveal"><span>1</span><div><h3>افتح Bridge</h3><p>استخدم الاختصار العالمي أو اكتب مباشرة من مساحة الترجمة.</p></div></li>
-          <li class="reveal"><span>2</span><div><h3>اكتب الرسالة</h3><p>حدد لغتي المصدر والهدف مرة، ثم اكتب بالطريقة المعتادة.</p></div></li>
-          <li class="reveal"><span>3</span><div><h3>اختر الفعل</h3><p>انسخ النتيجة فقط، الصقها، أو أرسلها — القرار يبقى لك.</p></div></li>
+          <li class="reveal"><span>1</span><div><h3 data-i18n="stepOneTitle">افتح Bridge</h3><p data-i18n="stepOneText">استخدم الاختصار العالمي أو اكتب مباشرة من مساحة الترجمة.</p></div></li>
+          <li class="reveal"><span>2</span><div><h3 data-i18n="stepTwoTitle">اكتب الرسالة</h3><p data-i18n="stepTwoText">حدد لغتي المصدر والهدف مرة، ثم اكتب بالطريقة المعتادة.</p></div></li>
+          <li class="reveal"><span>3</span><div><h3 data-i18n="stepThreeTitle">اختر الفعل</h3><p data-i18n="stepThreeText">انسخ النتيجة فقط، الصقها، أو أرسلها — القرار يبقى لك.</p></div></li>
         </ol>
       </div>
     </section>
 
     <section class="section privacy" id="privacy">
       <div class="container privacy-card reveal">
-        <div><p class="eyebrow">خصوصية مفهومة</p><h2>ماذا يبقى عندك؟</h2><p>مفتاح API مشفر على جهازك. سجل الترجمة متوقف افتراضياً، وذاكرة الترجمة المتكررة مؤقتة ولا تُكتب على القرص.</p></div>
+        <div><p class="eyebrow" data-i18n="privacyEyebrow">خصوصية مفهومة</p><h2 data-i18n="privacyTitle">ماذا يبقى عندك؟</h2><p data-i18n="privacyText">مفتاح API مشفر على جهازك. سجل الترجمة متوقف افتراضياً، وذاكرة الترجمة المتكررة مؤقتة ولا تُكتب على القرص.</p></div>
         <ul>
-          <li><b>المفتاح</b><span>محلي ومشفر في ويندوز</span></li>
-          <li><b>السجل</b><span>اختياري ويمكن مسحه</span></li>
-          <li><b>التخزين المؤقت</b><span>في الذاكرة لمدة قصيرة فقط</span></li>
+          <li><b data-i18n="privacyKey">المفتاح</b><span data-i18n="privacyKeyText">محلي ومشفر في ويندوز</span></li>
+          <li><b data-i18n="privacyHistory">السجل</b><span data-i18n="privacyHistoryText">اختياري ويمكن مسحه</span></li>
+          <li><b data-i18n="privacyCache">التخزين المؤقت</b><span data-i18n="privacyCacheText">في الذاكرة لمدة قصيرة فقط</span></li>
         </ul>
       </div>
     </section>
 
     <section class="final-cta">
-      <div class="container reveal"><p class="eyebrow">جاهز عندما تكون أنت جاهز</p><h2>لغة أقل كحاجز.<br>لعب أكثر كالمعتاد.</h2><a class="button button-dark" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">افتح المشروع على GitHub <span aria-hidden="true">←</span></a></div>
+      <div class="container reveal"><p class="eyebrow" data-i18n="ctaEyebrow">جاهز عندما تكون أنت جاهز</p><h2 data-i18n-html="ctaTitle">لغة أقل كحاجز.<br>لعب أكثر كالمعتاد.</h2><a class="button button-dark" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer"><span data-i18n="ctaButton">افتح المشروع على GitHub</span> <span aria-hidden="true">←</span></a></div>
     </section>
   </main>
 
-  <footer class="footer"><div class="container"><a class="brand" href="#top"><img src="brand-mark.svg" width="30" height="30" alt=""><span>Translation Bridge</span></a><p>أداة مفتوحة المصدر لترجمة محادثات الألعاب.</p><a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/issues" target="_blank" rel="noopener noreferrer">الإبلاغ عن مشكلة</a></div></footer>
+  <footer class="footer"><div class="container"><a class="brand" href="#top"><img src="brand-mark.svg" width="30" height="30" alt=""><span>Translation Bridge</span></a><p data-i18n="footer">أداة مفتوحة المصدر لترجمة محادثات الألعاب.</p><a href="https://github.com/kenshln47/TRANSLATION-BRIDGE/issues" target="_blank" rel="noopener noreferrer" data-i18n="report">الإبلاغ عن مشكلة</a></div></footer>
   <script src="script.js"></script>
 </body>
 </html>
