@@ -7,6 +7,7 @@ import logging
 import customtkinter as ctk
 
 from . import apply_app_icon
+from .scrolling import SmoothScrollableFrame
 from .theme import C
 
 logger = logging.getLogger(__name__)
@@ -64,19 +65,19 @@ class HistoryPanel:
         ).pack(side="right")
 
         ctk.CTkLabel(
-            w, text="Only shown when local history is enabled in Settings.",
+            w, text="Optional history is encrypted for your Windows account and never uploaded.",
             font=ctk.CTkFont(family="Segoe UI", size=10), text_color=C.TEXT_DIM,
         ).pack(anchor="w", padx=22, pady=(0, 12))
 
         if not history:
             ctk.CTkLabel(
-                w, text="Nothing saved yet.\nHistory stays local to this computer.",
+                w, text="Nothing saved yet.\nHistory is off by default and stays encrypted locally.",
                 font=ctk.CTkFont(family="Segoe UI", size=13), text_color=C.TEXT_DIM,
             ).pack(expand=True)
             return
 
         # Scrollable list
-        scroll = ctk.CTkScrollableFrame(
+        scroll = SmoothScrollableFrame(
             w, fg_color="transparent",
             scrollbar_button_color=C.BORDER,
             scrollbar_button_hover_color=C.PRIMARY,
@@ -94,37 +95,45 @@ class HistoryPanel:
                              border_width=1, border_color=C.BORDER)
         card.pack(fill="x", pady=4)
 
-        # Original text and timestamp; labels remain language-neutral.
+        source_text = entry.get("source_text", "")
+        target_text = entry.get("target_text", "")
+        source_lang = entry.get("source_lang", "Unknown")
+        target_lang = entry.get("target_lang", "Unknown")
+
+        # Language route and timestamp.
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(8, 2))
 
         ctk.CTkLabel(
-            top, text=entry.get("ts", ""),
-            font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
+            top, text=f"{source_lang}  →  {target_lang}",
+            font=ctk.CTkFont(size=9, weight="bold"), text_color=C.PRIMARY,
         ).pack(side="left")
 
-        ar_text = entry.get("ar", "")
-        if len(ar_text) > 44:
-            ar_text = ar_text[:44] + "…"
         ctk.CTkLabel(
-            top, text=ar_text,
-            font=ctk.CTkFont(size=10), text_color=C.TEXT_DIM,
-            justify="right",
+            top, text=entry.get("ts", ""),
+            font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
         ).pack(side="right")
+
+        if len(source_text) > 80:
+            source_text = source_text[:80] + "…"
+        ctk.CTkLabel(
+            card, text=source_text,
+            font=ctk.CTkFont(size=10), text_color=C.TEXT_DIM,
+            wraplength=430, justify="left", anchor="w",
+        ).pack(fill="x", padx=10, pady=(2, 4))
 
         # Translation and a compact copy action.
         bot = ctk.CTkFrame(card, fg_color="transparent")
         bot.pack(fill="x", padx=10, pady=(0, 8))
 
-        en_text = entry.get("en", "")
         ctk.CTkLabel(
-            bot, text=en_text,
+            bot, text=target_text,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             text_color=C.TEXT_SOFT,
             wraplength=330, justify="left",
         ).pack(side="left", fill="x", expand=True)
 
-        def _copy(text=en_text):
+        def _copy(text=target_text):
             try:
                 pyperclip.copy(text)
                 logger.info("Copied a translation from history.")

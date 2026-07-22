@@ -1,5 +1,5 @@
 """
-Translation Bridge v8.4
+Translation Bridge
 Multi-language translator via OpenRouter (selectable model)
 
 Main Application — ties together all modules.
@@ -12,6 +12,7 @@ import queue
 import sys
 import threading
 import time
+import tkinter as tk
 from dataclasses import dataclass
 
 import customtkinter as ctk
@@ -31,6 +32,11 @@ from .constants import (
     MAX_INPUT_CHARS, SOURCE_LANGUAGES,
 )
 from .translator import Translator
+from .chat_context import (
+    ChatCaptureError,
+    GameChatReader,
+    chat_region_for,
+)
 from .hotkey import NativeHotkey
 from .tray import TrayManager
 from .ui.theme import C
@@ -41,8 +47,11 @@ from .ui.history import HistoryPanel
 
 logger = logging.getLogger(__name__)
 
+_UI_EVENT_MAX_BATCH = 24
+_UI_EVENT_TIME_BUDGET = 0.006
+
 try:
-    from PIL import Image
+    from PIL import Image, ImageTk
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -66,6 +75,51 @@ class MONITORINFO(ctypes.Structure):
                 ("rcWork", RECT), ("dwFlags", ctypes.c_ulong)]
 
 
+class KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ("wVk", ctypes.c_ushort),
+        ("wScan", ctypes.c_ushort),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", ctypes.c_long),
+        ("dy", ctypes.c_long),
+        ("mouseData", ctypes.c_ulong),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", ctypes.c_ulong),
+        ("wParamL", ctypes.c_ushort),
+        ("wParamH", ctypes.c_ushort),
+    ]
+
+
+class INPUT_UNION(ctypes.Union):
+    # Include every Win32 union member so sizeof(INPUT) is the required 40
+    # bytes on 64-bit Windows. SendInput rejects a shortened keyboard-only
+    # approximation even when the event itself is a KEYBDINPUT.
+    _fields_ = [
+        ("mi", MOUSEINPUT),
+        ("ki", KEYBDINPUT),
+        ("hi", HARDWAREINPUT),
+    ]
+
+
+class INPUT(ctypes.Structure):
+    _anonymous_ = ("u",)
+    _fields_ = [("type", ctypes.c_ulong), ("u", INPUT_UNION)]
+
+
 @dataclass(frozen=True)
 class TranslationRequest:
     """Everything a background translation needs, frozen at submit time."""
@@ -79,11 +133,21 @@ class TranslationRequest:
     source_key: str
     target_key: str
     context: tuple[tuple[str, str], ...]
+    chat_context: tuple[str, ...]
     mode: str
-    target_hwnd: int | None
+    target_window: "WindowTarget | None"
     history_enabled: bool
     cache_enabled: bool
     cancel: threading.Event
+
+
+@dataclass(frozen=True)
+class WindowTarget:
+    """Stable identity for the external window selected at request time."""
+
+    hwnd: int
+    process_id: int
+    title: str = ""
 
 
 def _monitor_rect_from_handle(hmon):
@@ -133,6 +197,8 @@ class App(ctk.CTk):
         self.send_mode = ctk.StringVar(value=self.cfg.get("mode", MODE_COPY))
         self._timer_id = None
         self._last_hwnd = None
+        self._last_target = None
+        self._last_result_target = None
         self._t0 = 0
         self._hotkey_popup = None
         self._popup_cancel = None
@@ -141,6 +207,12 @@ class App(ctk.CTk):
         # In-game session memory: recent (source, translation) pairs sent as context
         self._session_pairs = []
         self._session_ts = 0.0
+        # One-shot OCR context. Pixels never live here: only cleaned text lines
+        # and a short timestamp are retained in memory.
+        self._chat_reader = GameChatReader()
+        self._chat_context_lines = ()
+        self._chat_context_ts = 0.0
+        self._chat_context_target = None
 
         # Hotkey & Tray
         self._hotkey = NativeHotkey()
@@ -162,6 +234,13 @@ class App(ctk.CTk):
         self._poll_window()
         self.after(25, self._drain_ui_events)
         self._register_hotkey(self.cfg.get("hotkey", DEFAULT_HOTKEY))
+
+        if self.cfg.get("chat_context_enabled", False):
+            threading.Thread(
+                target=self._chat_reader.prepare,
+                args=(self.cfg.get("target_lang", DEFAULT_TARGET),),
+                daemon=True,
+            ).start()
 
         self.protocol("WM_DELETE_WINDOW", self._hide_window)
 
@@ -191,10 +270,12 @@ class App(ctk.CTk):
             self._ui_events.put((callback, args))
 
     def _drain_ui_events(self):
-        """Run all queued worker results from the Tk event loop only."""
+        """Run worker results without monopolizing Tk's drawing loop."""
         if self._closing:
             return
-        while True:
+        started = time.perf_counter()
+        processed = 0
+        while processed < _UI_EVENT_MAX_BATCH:
             try:
                 callback, args = self._ui_events.get_nowait()
             except queue.Empty:
@@ -203,8 +284,13 @@ class App(ctk.CTk):
                 callback(*args)
             except Exception:
                 logger.exception("Unhandled UI event")
+            processed += 1
+            if time.perf_counter() - started >= _UI_EVENT_TIME_BUDGET:
+                break
         if not self._closing:
-            self.after(25, self._drain_ui_events)
+            # Yield immediately to pending paints, then continue a backlog on
+            # the next loop turn. An idle queue keeps the low-overhead cadence.
+            self.after(1 if not self._ui_events.empty() else 25, self._drain_ui_events)
 
     # ── SYSTEM TRAY ──
 
@@ -223,9 +309,15 @@ class App(ctk.CTk):
         """Single place that binds the global hotkey and surfaces failures in the UI."""
         self._hotkey.register(
             hk_str,
-            lambda: self._post_ui(self._show_quick_popup),
+            self._on_native_hotkey,
             on_fail=lambda msg: self._post_ui(self._hotkey_failed, msg),
         )
+
+    def _on_native_hotkey(self):
+        """Capture the active HWND before the popup has any chance to take focus."""
+        hwnd = user32.GetForegroundWindow()
+        target = self._snapshot_target(hwnd) or self._last_target
+        self._post_ui(self._show_quick_popup, target)
 
     def _hotkey_failed(self, msg: str):
         """Registration failed — tell the user instead of failing silently."""
@@ -268,16 +360,36 @@ class App(ctk.CTk):
     def _poll_window(self):
         try:
             h = user32.GetForegroundWindow()
-            if h:
-                buf = ctypes.create_unicode_buffer(256)
-                user32.GetWindowTextW(h, buf, 256)
-                t = buf.value
-                if t and not self._is_own_window(h):
-                    self._last_hwnd = h
-        except Exception:
-            pass
+            target = self._snapshot_target(h)
+            if target is not None:
+                self._last_hwnd = target.hwnd  # compatibility for older helpers
+                self._last_target = target
+        except Exception as exc:
+            logger.debug("Foreground-window poll failed: %s", exc)
         if not self._closing:
             self.after(500, self._poll_window)
+
+    def _snapshot_target(self, hwnd) -> WindowTarget | None:
+        """Capture HWND + PID so recycled handles cannot receive later input."""
+        if not hwnd or not user32.IsWindow(hwnd) or self._is_own_window(hwnd):
+            return None
+        buf = ctypes.create_unicode_buffer(512)
+        user32.GetWindowTextW(hwnd, buf, len(buf))
+        if not buf.value.strip():
+            return None
+        process_id = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+        if not process_id.value:
+            return None
+        return WindowTarget(int(hwnd), int(process_id.value), buf.value[:256])
+
+    @staticmethod
+    def _same_target(first: WindowTarget | None, second: WindowTarget | None) -> bool:
+        return bool(
+            first and second
+            and first.hwnd == second.hwnd
+            and first.process_id == second.process_id
+        )
 
     @staticmethod
     def _is_own_window(hwnd) -> bool:
@@ -306,7 +418,7 @@ class App(ctk.CTk):
 
     # ── QUICK POPUP (Hotkey) ──
 
-    def _show_quick_popup(self):
+    def _show_quick_popup(self, target: WindowTarget | None = None):
         if self._hotkey_popup and self._hotkey_popup.winfo_exists():
             # Toggling the popup away also aborts any in-flight translation
             if self._popup_cancel is not None:
@@ -317,9 +429,23 @@ class App(ctk.CTk):
 
         # Fresh cancel token for this popup's lifetime
         self._popup_cancel = cancel_flag = threading.Event()
-        # The hotkey was pressed while this was the active non-app window.
-        # Keep that exact target; never infer a new target after translating.
-        target_hwnd = self._last_hwnd
+        # Keep the exact HWND+PID captured on the native hotkey thread.  Falling
+        # back is only for programmatic calls that did not originate in-game.
+        target = target or self._last_target
+        target_hwnd = target.hwnd if target else None
+
+        # Grab pixels synchronously *before* creating our topmost popup, then do
+        # OCR in the background while the player types.  This is one screenshot
+        # in RAM, never a monitoring loop and never a disk write.
+        chat_image = None
+        if self.cfg.get("chat_context_enabled", False) and target_hwnd:
+            try:
+                chat_image = self._chat_reader.capture_region(
+                    target_hwnd,
+                    chat_region_for(self.cfg, self.cfg.get("game", "General")),
+                )
+            except ChatCaptureError as exc:
+                logger.info("Game chat context unavailable: %s", exc)
 
         # Warm the API connection while the user types (zero-token, best-effort)
         threading.Thread(target=self.translator.warm, daemon=True).start()
@@ -381,6 +507,37 @@ class App(ctk.CTk):
         )
 
         busy = {"v": False}
+        ocr_state = {"lines": (), "ready": threading.Event()}
+        if chat_image is not None:
+            def _read_visible_chat(image=chat_image):
+                result = self._chat_reader.read_image(
+                    image,
+                    self.cfg.get("target_lang", DEFAULT_TARGET),
+                    self.cfg.get("chat_context_max_lines", 4),
+                )
+                ocr_state["lines"] = result.lines
+                ocr_state["ready"].set()
+                self._post_ui(_chat_context_ready, result, target)
+
+            def _chat_context_ready(result, captured_target):
+                # A closed/replaced popup owns no state.  Without this guard a
+                # slow older OCR worker could overwrite the newer popup's chat
+                # context for the next 60 seconds.
+                if cancel_flag.is_set() or self._hotkey_popup is not p:
+                    return
+                if result.lines:
+                    self._chat_context_lines = result.lines
+                    self._chat_context_ts = time.monotonic()
+                    self._chat_context_target = captured_target
+                    if p.winfo_exists() and not busy["v"]:
+                        status_lbl.pack(side="right", padx=(0, 9))
+                        status_lbl.configure(
+                            text=f"CTX {len(result.lines)}", text_color=C.PRIMARY,
+                        )
+
+            threading.Thread(target=_read_visible_chat, daemon=True).start()
+        else:
+            ocr_state["ready"].set()
 
         def _close(e=None):
             # Esc (or any close) aborts an in-flight translation: nothing gets
@@ -450,9 +607,6 @@ class App(ctk.CTk):
             def _finish(result):
                 if cancel_flag.is_set():
                     return
-                if result.startswith("["):
-                    _handle_error(result.strip("[]"))
-                    return
                 # Never paste after a clipboard failure: Ctrl+V might otherwise
                 # send the user's previous, possibly sensitive clipboard value.
                 if not self._safe_copy(result):
@@ -460,12 +614,20 @@ class App(ctk.CTk):
                     return
                 if request_cfg["history_enabled"]:
                     self._history = add_history_entry(
-                        original_text, result, self._history, MAX_HISTORY_ITEMS
+                        original_text, result, self._history, MAX_HISTORY_ITEMS,
+                        source_lang=request_cfg["source_lang"],
+                        target_lang=request_cfg["target_lang"],
                     )
                 self._session_add(original_text, result)
                 _paste_and_close(result, mode)
 
             def _do():
+                # OCR normally finishes while the player is typing.  If Enter
+                # wins the race, wait only a tiny bounded window so context can
+                # help without making translation feel slow.
+                ocr_state["ready"].wait(0.25)
+                visible_chat = tuple(ocr_state["lines"])
+
                 def on_token(tok):
                     self._post_ui(_show_token, tok)
 
@@ -482,7 +644,7 @@ class App(ctk.CTk):
                     ai_tone=request_cfg["tone"],
                     source_key=request_cfg["source_lang"],
                     target_key=request_cfg["target_lang"],
-                    context=ctx, cancel=cancel_flag,
+                    context=ctx, chat_context=visible_chat, cancel=cancel_flag,
                     cache_enabled=bool(request_cfg["cache_enabled"]),
                     on_token=on_token, on_done=on_done, on_error=on_error
                 )
@@ -498,7 +660,7 @@ class App(ctk.CTk):
 
             if mode == MODE_COPY:
                 # Return focus to the previously active window
-                self._focus_target_window(target_hwnd)
+                self._focus_target_window(target)
                 Toast.show(self, "Copied to clipboard ✅", style="success")
                 return
 
@@ -506,15 +668,28 @@ class App(ctk.CTk):
                 # Let the destroyed popup relinquish focus, then verify the exact
                 # target captured when the hotkey was pressed before injecting keys.
                 time.sleep(0.06)
-                if not self._focus_target_window(target_hwnd):
+                if not self._focus_target_window(target):
                     self._post_ui(self._paste_failed, "Target window is no longer available")
+                    return
+                if not self._target_is_foreground(target):
+                    self._post_ui(self._paste_failed, "Target window lost focus before paste")
                     return
                 self._release_all_modifiers()
                 time.sleep(0.03)
-                self._kb_ctrl_v()
+                if not self._target_is_foreground(target):
+                    self._post_ui(self._paste_failed, "Target window lost focus before paste")
+                    return
+                if not self._kb_ctrl_v():
+                    self._post_ui(self._paste_failed, "Windows blocked input to the game; try matching administrator level")
+                    return
                 if mode == MODE_SEND:
                     time.sleep(0.06)
-                    self._kb_enter()
+                    if not self._target_is_foreground(target):
+                        self._post_ui(self._paste_failed, "Target window lost focus before send")
+                        return
+                    if not self._kb_enter():
+                        self._post_ui(self._paste_failed, "Pasted, but Windows blocked the Enter key")
+                        return
                 label = "Sent ✅" if mode == MODE_SEND else "Pasted ✅"
                 self._post_ui(Toast.show, self, label, "success")
 
@@ -808,6 +983,7 @@ class App(ctk.CTk):
             self._status(f"Text is too long (max {MAX_INPUT_CHARS} characters)", C.WARN)
             return
         self._request_sequence += 1
+        target = self._last_target
         request = TranslationRequest(
             request_id=self._request_sequence,
             text=text,
@@ -818,8 +994,9 @@ class App(ctk.CTk):
             source_key=self.cfg.get("source_lang", DEFAULT_SOURCE),
             target_key=self.cfg.get("target_lang", DEFAULT_TARGET),
             context=tuple(self._session_context()),
+            chat_context=self._recent_chat_context(target),
             mode=self.send_mode.get(),
-            target_hwnd=self._last_hwnd,
+            target_window=target,
             history_enabled=bool(self.cfg.get("history_enabled", False)),
             cache_enabled=bool(self.cfg.get("performance_cache_enabled", True)),
             cancel=threading.Event(),
@@ -856,7 +1033,7 @@ class App(ctk.CTk):
             ai_tone=request.ai_tone,
             source_key=request.source_key,
             target_key=request.target_key,
-            context=request.context,
+            context=request.context, chat_context=request.chat_context,
             cancel=request.cancel,
             cache_enabled=request.cache_enabled,
             on_token=lambda t: self._post_ui(self._add_tok, request.request_id, t),
@@ -881,10 +1058,6 @@ class App(ctk.CTk):
         self.tr_btn.configure(state="normal", text=self._translate_idle_label)
         elapsed = time.time() - self._t0
 
-        if result.startswith("["):
-            self._status(result, C.ERROR)
-            return
-
         self._show_preview(result)
         if not self._safe_copy(result):
             self._fail("Could not copy translation to clipboard", request.request_id)
@@ -894,24 +1067,27 @@ class App(ctk.CTk):
         # Save to history + session memory
         if request.history_enabled and request.source_text:
             self._history = add_history_entry(
-                request.source_text, result, self._history, MAX_HISTORY_ITEMS
+                request.source_text, result, self._history, MAX_HISTORY_ITEMS,
+                source_lang=request.source_key,
+                target_lang=request.target_key,
             )
         if request.source_text:
             self._session_add(request.source_text, result)
 
         mode = request.mode
+        self._last_result_target = request.target_window
         if mode == MODE_COPY:
             self._status(f"Ready in {elapsed:.1f}s · copied to clipboard", C.SUCCESS)
         elif mode == MODE_PASTE:
             self._status(f"Ready in {elapsed:.1f}s · pasting", C.SUCCESS)
             self.iconify()
             self.update()
-            threading.Thread(target=self._do_paste, args=(result, False, request.target_hwnd), daemon=True).start()
+            threading.Thread(target=self._do_paste, args=(result, False, request.target_window), daemon=True).start()
         elif mode == MODE_SEND:
             self._status(f"Ready in {elapsed:.1f}s · sending", C.SUCCESS)
             self.iconify()
             self.update()
-            threading.Thread(target=self._do_paste, args=(result, True, request.target_hwnd), daemon=True).start()
+            threading.Thread(target=self._do_paste, args=(result, True, request.target_window), daemon=True).start()
 
     def _fail(self, msg, request_id=None):
         if request_id is not None and request_id != self._active_request_id:
@@ -925,27 +1101,52 @@ class App(ctk.CTk):
 
     # ── AUTO-PASTE ──
 
-    def _do_paste(self, text, enter, target_hwnd):
+    def _do_paste(self, text, enter, target_window):
         time.sleep(0.05)
-        if not self._focus_target_window(target_hwnd):
+        if not self._focus_target_window(target_window):
             self._post_ui(self._paste_failed, "Target window changed; translation is only in your clipboard")
+            return
+        if not self._target_is_foreground(target_window):
+            self._post_ui(self._paste_failed, "Target window lost focus before paste")
             return
         self._release_all_modifiers()
         time.sleep(0.03)
-        self._kb_ctrl_v()
+        if not self._target_is_foreground(target_window):
+            self._post_ui(self._paste_failed, "Target window lost focus before paste")
+            return
+        if not self._kb_ctrl_v():
+            self._post_ui(self._paste_failed, "Windows blocked input to the game; try matching administrator level")
+            return
         if enter:
             time.sleep(0.05)
-            self._kb_enter()
+            if not self._target_is_foreground(target_window):
+                self._post_ui(self._paste_failed, "Target window lost focus before send")
+                return
+            if not self._kb_enter():
+                self._post_ui(self._paste_failed, "Pasted, but Windows blocked the Enter key")
+                return
         time.sleep(0.05)
         self._post_ui(self._restore, enter)
 
-    def _focus_target_window(self, target_hwnd) -> bool:
-        """Focus one captured external window; never use unsafe Alt+Tab guessing."""
-        if not target_hwnd or self._is_own_window(target_hwnd):
+    def _focus_target_window(self, target_window) -> bool:
+        """Focus one captured external window after verifying its original PID."""
+        if isinstance(target_window, WindowTarget):
+            target = target_window
+        elif target_window:
+            target = self._snapshot_target(target_window)
+        else:
+            target = None
+        if target is None or self._is_own_window(target.hwnd):
             return False
+        target_hwnd = target.hwnd
         k32 = ctypes.windll.kernel32
         try:
             if not user32.IsWindow(target_hwnd):
+                return False
+            current_pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(target_hwnd, ctypes.byref(current_pid))
+            if current_pid.value != target.process_id:
+                logger.warning("Refusing input: captured HWND now belongs to another process.")
                 return False
             if user32.GetForegroundWindow() == target_hwnd:
                 return True
@@ -964,6 +1165,19 @@ class App(ctk.CTk):
         except Exception as e:
             logger.warning(f"Failed to focus target window: {e}")
             return False
+
+    def _target_is_foreground(self, target_window) -> bool:
+        """Revalidate PID and focus immediately before every input injection."""
+        if not isinstance(target_window, WindowTarget):
+            return False
+        if not user32.IsWindow(target_window.hwnd):
+            return False
+        current_pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(target_window.hwnd, ctypes.byref(current_pid))
+        return bool(
+            current_pid.value == target_window.process_id
+            and user32.GetForegroundWindow() == target_window.hwnd
+        )
 
     def _paste_failed(self, reason):
         self.deiconify()
@@ -988,7 +1202,7 @@ class App(ctk.CTk):
         if not text:
             return
         enter = self.send_mode.get() == MODE_SEND
-        target_hwnd = self._last_hwnd
+        target_window = self._last_result_target or self._last_target
         if not self._safe_copy(text):
             self._status("Could not copy the translation to clipboard", C.WARN)
             return
@@ -999,16 +1213,29 @@ class App(ctk.CTk):
 
         def _s():
             time.sleep(0.3)
-            if not self._focus_target_window(target_hwnd):
+            if not self._focus_target_window(target_window):
                 self._post_ui(self._paste_failed, "Target window changed; translation is only in your clipboard")
                 return
             time.sleep(1.5)
+            if not self._target_is_foreground(target_window):
+                self._post_ui(self._paste_failed, "Target window lost focus before paste")
+                return
             self._release_all_modifiers()
             time.sleep(0.05)
-            self._kb_ctrl_v()
+            if not self._target_is_foreground(target_window):
+                self._post_ui(self._paste_failed, "Target window lost focus before paste")
+                return
+            if not self._kb_ctrl_v():
+                self._post_ui(self._paste_failed, "Windows blocked input to the game; try matching administrator level")
+                return
             if enter:
                 time.sleep(0.2)
-                self._kb_enter()
+                if not self._target_is_foreground(target_window):
+                    self._post_ui(self._paste_failed, "Target window lost focus before send")
+                    return
+                if not self._kb_enter():
+                    self._post_ui(self._paste_failed, "Pasted, but Windows blocked the Enter key")
+                    return
             time.sleep(0.4)
             self._post_ui(self._manual_done, enter)
 
@@ -1023,6 +1250,146 @@ class App(ctk.CTk):
         self.cp_lbl.configure(text="")
         self.send_btn.configure(state="disabled")
         self.inp.focus_set()
+
+    # ── ONE-SHOT GAME CHAT CONTEXT ──
+
+    def _recent_chat_context(self, target: WindowTarget | None) -> tuple[str, ...]:
+        """Return only fresh OCR text captured from this exact game process."""
+        if not self.cfg.get("chat_context_enabled", False):
+            return ()
+        if time.monotonic() - self._chat_context_ts > 60.0:
+            return ()
+        if not self._same_target(target, self._chat_context_target):
+            return ()
+        return tuple(self._chat_context_lines)
+
+    def start_chat_calibration(self):
+        """Let the user draw the chat rectangle over one in-memory game frame."""
+        target = self._last_target
+        if target is None:
+            Toast.show(self, "Open the game once, then calibrate its chat area", style="error")
+            return
+
+        game_mode = self.cfg.get("game", "General")
+        root_was_visible = self.state() != "withdrawn"
+        hidden_windows = []
+        for child in self.winfo_children():
+            if isinstance(child, tk.Toplevel):
+                try:
+                    if child.winfo_viewable():
+                        hidden_windows.append(child)
+                        child.withdraw()
+                except tk.TclError:
+                    pass
+        self.withdraw()
+
+        def _restore_windows():
+            if root_was_visible:
+                self.deiconify()
+            for child in hidden_windows:
+                try:
+                    if child.winfo_exists():
+                        child.deiconify()
+                        child.lift()
+                except tk.TclError:
+                    pass
+
+        def _capture():
+            if not self._focus_target_window(target):
+                self._post_ui(_calibration_failed, "Could not focus the saved game window")
+                return
+            time.sleep(0.18)
+            try:
+                image, bounds = self._chat_reader.capture_window(target.hwnd)
+            except ChatCaptureError as exc:
+                self._post_ui(_calibration_failed, str(exc))
+                return
+            self._post_ui(_show_selector, image, bounds)
+
+        def _calibration_failed(message):
+            _restore_windows()
+            Toast.show(self, message, style="error")
+
+        def _show_selector(image, bounds):
+            left, top, right, bottom = bounds
+            width, height = image.size
+            overlay = tk.Toplevel(self)
+            overlay.overrideredirect(True)
+            overlay.attributes("-topmost", True)
+            overlay.geometry(f"{width}x{height}+{left}+{top}")
+            overlay.configure(bg="#101512")
+
+            canvas = tk.Canvas(
+                overlay, width=width, height=height, highlightthickness=0,
+                cursor="crosshair", bg="#101512",
+            )
+            canvas.pack(fill="both", expand=True)
+            photo = ImageTk.PhotoImage(image, master=overlay)
+            canvas.create_image(0, 0, image=photo, anchor="nw")
+            canvas.photo = photo
+            canvas.create_rectangle(14, 14, min(width - 14, 570), 62, fill="#101512", outline="#9CCF78", width=2)
+            canvas.create_text(
+                30, 38, anchor="w", fill="#F3F0E8",
+                font=("Segoe UI", 13, "bold"),
+                text="Drag around the game chat · ESC to cancel",
+            )
+
+            state = {"start": None, "rect": None, "closed": False}
+
+            def _finish(saved=False):
+                if state["closed"]:
+                    return
+                state["closed"] = True
+                try:
+                    overlay.destroy()
+                finally:
+                    image.close()
+                    _restore_windows()
+                if saved:
+                    Toast.show(self, f"Chat area saved for {game_mode}", style="success")
+
+            def _down(event):
+                state["start"] = (event.x, event.y)
+                if state["rect"] is not None:
+                    canvas.delete(state["rect"])
+                state["rect"] = canvas.create_rectangle(
+                    event.x, event.y, event.x, event.y,
+                    outline="#9CCF78", width=3,
+                )
+
+            def _drag(event):
+                if state["start"] and state["rect"] is not None:
+                    x0, y0 = state["start"]
+                    canvas.coords(state["rect"], x0, y0, event.x, event.y)
+
+            def _up(event):
+                if not state["start"]:
+                    return
+                x0, y0 = state["start"]
+                clamp_x = lambda value: max(0, min(width, value))
+                clamp_y = lambda value: max(0, min(height, value))
+                x1, x2 = sorted((clamp_x(x0), clamp_x(event.x)))
+                y1, y2 = sorted((clamp_y(y0), clamp_y(event.y)))
+                if x2 - x1 < 40 or y2 - y1 < 30:
+                    return
+                normalized = [x1 / width, y1 / height, x2 / width, y2 / height]
+                regions = self.cfg.get("chat_regions", {})
+                if not isinstance(regions, dict):
+                    regions = {}
+                self.cfg["chat_regions"] = dict(regions)
+                self.cfg["chat_regions"][game_mode] = normalized
+                if not save_config(self.cfg):
+                    Toast.show(self, "Could not save the chat area", style="error")
+                    return
+                _finish(saved=True)
+
+            canvas.bind("<ButtonPress-1>", _down)
+            canvas.bind("<B1-Motion>", _drag)
+            canvas.bind("<ButtonRelease-1>", _up)
+            overlay.bind("<Escape>", lambda _event: _finish(False))
+            overlay.focus_force()
+
+        threading.Thread(target=_capture, daemon=True).start()
 
     # ── SESSION CONTEXT ──
 
@@ -1045,7 +1412,15 @@ class App(ctk.CTk):
         """Drop session context (e.g. after language/model change in settings)."""
         self._session_pairs = []
         self._session_ts = 0.0
-
+        self._chat_context_lines = ()
+        self._chat_context_ts = 0.0
+        self._chat_context_target = None
+        if self.cfg.get("chat_context_enabled", False):
+            threading.Thread(
+                target=self._chat_reader.prepare,
+                args=(self.cfg.get("target_lang", DEFAULT_TARGET),),
+                daemon=True,
+            ).start()
     def cancel_active_translation(self, reason="Cancelled"):
         """Cancel a main-window request and ignore any late worker callbacks."""
         if self._main_cancel is None:
@@ -1058,6 +1433,19 @@ class App(ctk.CTk):
             self.is_busy = False
             self.tr_btn.configure(state="normal", text=self._translate_idle_label)
             self._status(reason, C.WARN)
+
+    def cancel_all_translations(self, reason="Cancelled"):
+        """Cancel main and quick-popup workers before changing network clients."""
+        self.cancel_active_translation(reason)
+        if self._popup_cancel is not None:
+            self._popup_cancel.set()
+        if self._hotkey_popup is not None:
+            try:
+                if self._hotkey_popup.winfo_exists():
+                    self._hotkey_popup.destroy()
+            except tk.TclError:
+                pass
+            self._hotkey_popup = None
 
     # ── HELPERS ──
 
@@ -1072,20 +1460,38 @@ class App(ctk.CTk):
 
     @staticmethod
     def _release_all_modifiers():
-        """Force-release all modifier keys to prevent stuck keys."""
-        UP = 0x0002
-        EXT = 0x0001
-        user32.keybd_event(0x10, 0, UP, 0)          # Shift
-        user32.keybd_event(0x11, 0, UP, 0)          # Ctrl
-        user32.keybd_event(0x12, 0, UP | EXT, 0)    # Alt
-        user32.keybd_event(0xA0, 0, UP, 0)          # LShift
-        user32.keybd_event(0xA1, 0, UP, 0)          # RShift
-        user32.keybd_event(0xA2, 0, UP, 0)          # LCtrl
-        user32.keybd_event(0xA3, 0, UP, 0)          # RCtrl
-        user32.keybd_event(0xA4, 0, UP | EXT, 0)    # LAlt
-        user32.keybd_event(0xA5, 0, UP | EXT, 0)    # RAlt
-        user32.keybd_event(0x5B, 0, UP | EXT, 0)    # LWin
-        user32.keybd_event(0x5C, 0, UP | EXT, 0)    # RWin
+        """Force-release modifiers with the supported SendInput API."""
+        return App._send_key_events([
+            (vk, True) for vk in (
+                0x10, 0x11, 0x12, 0xA0, 0xA1, 0xA2,
+                0xA3, 0xA4, 0xA5, 0x5B, 0x5C,
+            )
+        ])
+
+    @staticmethod
+    def _send_key_events(events) -> bool:
+        """Inject virtual-key events atomically; false usually means UIPI blocked us."""
+        KEYEVENTF_KEYUP = 0x0002
+        items = []
+        for vk, key_up in events:
+            items.append(INPUT(
+                type=1,  # INPUT_KEYBOARD
+                ki=KEYBDINPUT(
+                    wVk=vk,
+                    wScan=0,
+                    dwFlags=KEYEVENTF_KEYUP if key_up else 0,
+                    time=0,
+                    dwExtraInfo=0,
+                ),
+            ))
+        if not items:
+            return True
+        array_type = INPUT * len(items)
+        sent = user32.SendInput(len(items), array_type(*items), ctypes.sizeof(INPUT))
+        if sent != len(items):
+            logger.warning("SendInput injected %s/%s keyboard events.", sent, len(items))
+            return False
+        return True
 
     @staticmethod
     def _safe_copy(text):
@@ -1102,18 +1508,13 @@ class App(ctk.CTk):
 
     @staticmethod
     def _kb_ctrl_v():
-        UP = 0x0002
-        try:
-            user32.keybd_event(0x11, 0, 0, 0)
-            user32.keybd_event(0x56, 0, 0, 0)
-            time.sleep(0.05)
-            user32.keybd_event(0x56, 0, UP, 0)
-        finally:
-            user32.keybd_event(0x11, 0, UP, 0)
+        return App._send_key_events([
+            (0x11, False),  # Ctrl down
+            (0x56, False),  # V down
+            (0x56, True),
+            (0x11, True),
+        ])
 
     @staticmethod
     def _kb_enter():
-        UP = 0x0002
-        user32.keybd_event(0x0D, 0, 0, 0)
-        time.sleep(0.05)
-        user32.keybd_event(0x0D, 0, UP, 0)
+        return App._send_key_events([(0x0D, False), (0x0D, True)])

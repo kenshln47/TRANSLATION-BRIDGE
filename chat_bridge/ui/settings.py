@@ -9,6 +9,7 @@ import customtkinter as ctk
 import pyperclip
 
 from . import apply_app_icon
+from .scrolling import SmoothScrollableFrame
 from .theme import C
 from ..config import (
     load_api_key, save_api_key, save_config,
@@ -18,6 +19,7 @@ from ..constants import (
     GAME_LIST, TONE_LIST, ARABIC_TO_ENGLISH,
     SOURCE_LIST, TARGET_LIST, DEFAULT_SOURCE, DEFAULT_TARGET,
     MODEL_LABELS, MODEL_OPTIONS, OPENROUTER_MODEL, DEFAULT_MODEL_LABEL,
+    MAX_CUSTOM_RULES_CHARS,
 )
 from ..hotkey import record_hotkey_native
 
@@ -66,8 +68,14 @@ class SettingsDialog:
         # everything else lives in a scrollable body.
         btn_row = ctk.CTkFrame(d, fg_color="transparent")
         btn_row.pack(side="bottom", fill="x", padx=16, pady=(6, 12))
+        self._save_status = ctk.CTkLabel(
+            btn_row, text="", font=ctk.CTkFont(size=9), text_color=C.WARN,
+        )
+        self._save_status.pack(fill="x", pady=(0, 3))
+        action_row = ctk.CTkFrame(btn_row, fg_color="transparent")
+        action_row.pack(fill="x")
 
-        body = ctk.CTkScrollableFrame(
+        body = SmoothScrollableFrame(
             d, fg_color="transparent",
             scrollbar_button_color=C.BORDER,
             scrollbar_button_hover_color=C.PRIMARY,
@@ -254,7 +262,7 @@ class SettingsDialog:
             onvalue=True, offvalue=False, width=48, progress_color=C.PRIMARY,
         ).pack(side="right")
         ctk.CTkLabel(
-            d, text="Off by default. History stays on this computer when enabled.",
+            d, text="Off by default. When enabled, entries are DPAPI-encrypted for your Windows account.",
             font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
         ).pack(anchor="w", padx=16)
         ctk.CTkButton(
@@ -283,15 +291,44 @@ class SettingsDialog:
             font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
         ).pack(anchor="w", padx=16, pady=(0, 12))
 
+        # —— One-shot game chat context ——
+        chat_row = ctk.CTkFrame(d, fg_color="transparent")
+        chat_row.pack(fill="x", padx=16, pady=(2, 6))
+        self._chat_context_enabled_var = ctk.BooleanVar(
+            value=bool(self._app.cfg.get("chat_context_enabled", False))
+        )
+        ctk.CTkLabel(
+            chat_row, text="GAME CHAT CONTEXT (BETA)",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=C.TEXT,
+        ).pack(side="left")
+        ctk.CTkSwitch(
+            chat_row, text="", variable=self._chat_context_enabled_var,
+            onvalue=True, offvalue=False, width=48, progress_color=C.PRIMARY,
+        ).pack(side="right")
+        ctk.CTkLabel(
+            d,
+            text="Off by default. Reads the visible chat once when Quick Translate opens, keeps text in memory, and saves no screenshots.",
+            font=ctk.CTkFont(size=9), text_color=C.TEXT_DIM,
+            wraplength=430, justify="left",
+        ).pack(anchor="w", padx=16)
+        ctk.CTkButton(
+            d, text="CALIBRATE CHAT AREA", height=28, corner_radius=6,
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color=C.BG_RAISED, hover_color=C.PRIMARY_DIM,
+            text_color=C.TEXT, border_width=1, border_color=C.BORDER,
+            command=self._start_chat_calibration,
+        ).pack(fill="x", padx=16, pady=(4, 12))
+
         # ── Buttons (pinned row created before the scrollable body) ──
         ctk.CTkButton(
-            btn_row, text="SAVE", width=150, height=36,
+            action_row, text="SAVE", width=150, height=36,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             fg_color=C.PRIMARY, hover_color=C.PRIMARY_H, text_color=C.BG, command=self._save,
         ).pack(side="left", expand=True, padx=(0, 4))
 
         ctk.CTkButton(
-            btn_row, text="CANCEL", width=150, height=36,
+            action_row, text="CANCEL", width=150, height=36,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             fg_color=C.BG_RAISED, hover_color=C.BORDER, text_color=C.TEXT, command=self._close,
         ).pack(side="right", expand=True, padx=(4, 0))
@@ -339,52 +376,128 @@ class SettingsDialog:
         if file_path:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    self._rules_box.delete("1.0", "end")
-                    self._rules_box.insert("1.0", f.read())
+                    profile = f.read(MAX_CUSTOM_RULES_CHARS + 1)
+                if len(profile) > MAX_CUSTOM_RULES_CHARS:
+                    self._show_save_error(
+                        f"Profile is too long (maximum {MAX_CUSTOM_RULES_CHARS:,} characters)."
+                    )
+                    return
+                self._rules_box.delete("1.0", "end")
+                self._rules_box.insert("1.0", profile)
+                self._save_status.configure(
+                    text="Profile imported. Save to apply it.", text_color=C.ACCENT
+                )
                 logger.info(f"Imported profile from: {file_path}")
             except Exception as e:
                 logger.error(f"Failed to import profile: {e}")
+                self._show_save_error("Could not read that profile file.")
 
     def _clear_history(self):
         if clear_history():
             self._app._history = []
+            self._save_status.configure(
+                text="Encrypted local history cleared.", text_color=C.ACCENT
+            )
             logger.info("History cleared from Settings.")
+        else:
+            self._show_save_error("Could not clear local history.")
+
+    def _start_chat_calibration(self):
+        start = getattr(self._app, "start_chat_calibration", None)
+        if not callable(start):
+            self._show_save_error("Chat calibration is unavailable in this build.")
+            return
+        # The full-screen selector must receive mouse input. Temporarily release
+        # this modal's Tk grab; restore it when App reveals Settings again.
+        binding_id = None
+
+        def _restore_grab(_event=None):
+            nonlocal binding_id
+            if not self._dialog.winfo_exists() or self._dialog.state() == "withdrawn":
+                return
+            try:
+                self._dialog.grab_set()
+            except Exception:
+                pass
+            if binding_id:
+                self._dialog.unbind("<Map>", binding_id)
+                binding_id = None
+
+        try:
+            self._dialog.grab_release()
+            binding_id = self._dialog.bind("<Map>", _restore_grab, add="+")
+            start()
+            _restore_grab()
+        except Exception as e:
+            _restore_grab()
+            logger.error(f"Failed to start chat calibration: {e}")
+            self._show_save_error("Could not start chat-area calibration.")
+
+    def _show_save_error(self, message: str):
+        logger.error(message)
+        if hasattr(self, "_save_status"):
+            self._save_status.configure(text=message, text_color=C.ERROR)
 
     def _save(self):
         k = self._key_entry.get().strip()
         previous_key = load_api_key()
-        if k != previous_key:
-            if not save_api_key(k):
-                logger.error("Settings were not saved because the API key could not be stored.")
-                return
-            self._app.translator.configure_api_key(k)
+        rules = self._rules_box.get("1.0", "end").strip()
+        if len(rules) > MAX_CUSTOM_RULES_CHARS:
+            self._show_save_error(
+                f"Override rules are too long (maximum {MAX_CUSTOM_RULES_CHARS:,} characters)."
+            )
+            return
 
-        # Apply selected model (resolve label → OpenRouter slug)
-        self._app.cfg["model"] = self._model_var.get()
-        self._app.translator.set_model(
-            MODEL_OPTIONS.get(self._model_var.get(), OPENROUTER_MODEL)
-        )
-
+        new_cfg = dict(self._app.cfg)
+        new_cfg["model"] = self._model_var.get()
         hk = self._pending_hotkey.strip().lower()
         if hk:
-            self._app.cfg["hotkey"] = hk
-        self._app.cfg["source_lang"] = self._src_var.get()
-        self._app.cfg["target_lang"] = self._tgt_var.get()
-        self._app.cfg["game"] = self._game_var.get()
-        self._app.cfg["tone"] = self._tone_var.get()
-        self._app.cfg["custom_rules"] = self._rules_box.get("1.0", "end").strip()
-        self._app.cfg["history_enabled"] = bool(self._history_enabled_var.get())
-        self._app.cfg["performance_cache_enabled"] = bool(self._cache_enabled_var.get())
-        if not self._app.cfg["performance_cache_enabled"]:
+            new_cfg["hotkey"] = hk
+        new_cfg["source_lang"] = self._src_var.get()
+        new_cfg["target_lang"] = self._tgt_var.get()
+        new_cfg["game"] = self._game_var.get()
+        new_cfg["tone"] = self._tone_var.get()
+        new_cfg["custom_rules"] = rules
+        new_cfg["history_enabled"] = bool(self._history_enabled_var.get())
+        new_cfg["performance_cache_enabled"] = bool(self._cache_enabled_var.get())
+        new_cfg["chat_context_enabled"] = bool(self._chat_context_enabled_var.get())
+
+        key_changed = k != previous_key
+        if key_changed and not save_api_key(k):
+            self._show_save_error("Could not securely save the API key. Nothing was changed.")
+            return
+        if not save_config(new_cfg):
+            rollback_ok = not key_changed or save_api_key(previous_key)
+            suffix = "" if rollback_ok else " The previous API key could not be restored."
+            self._show_save_error("Could not save settings. Nothing was applied." + suffix)
+            return
+
+        # Persistence succeeded. Cancel every in-flight request before closing
+        # or replacing the translator's HTTP client/model configuration.
+        cancel_all = getattr(self._app, "cancel_all_translations", None)
+        if callable(cancel_all):
+            cancel_all("Settings changed — translation cancelled")
+        else:
+            self._app.cancel_active_translation("Settings changed — translation cancelled")
+            popup_cancel = getattr(self._app, "_popup_cancel", None)
+            if popup_cancel is not None:
+                popup_cancel.set()
+
+        self._app.cfg.clear()
+        self._app.cfg.update(new_cfg)
+        if key_changed:
+            self._app.translator.configure_api_key(k)
+        self._app.translator.set_model(
+            MODEL_OPTIONS.get(new_cfg["model"], OPENROUTER_MODEL)
+        )
+        if not new_cfg["performance_cache_enabled"]:
             self._app.translator.clear_cache()
-        save_config(self._app.cfg)
 
         # Start-with-Windows switch (HKCU Run registry value)
         autostart_ok = set_autostart(bool(self._autostart_var.get()))
 
         # Language/model may have changed — old session context would mislead
         # the model (turns in the wrong language), so start fresh.
-        self._app.cancel_active_translation("Settings changed — translation cancelled")
         self._app.reset_session()
 
         # Update main UI subtitle to reflect language

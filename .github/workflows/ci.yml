@@ -1,5 +1,8 @@
 name: Verify Translation Bridge
 
+permissions:
+  contents: read
+
 on:
   push:
   pull_request:
@@ -12,9 +15,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
       - name: Install runtime dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt && python -m pip install pip-audit
+      - name: Audit pinned dependencies
+        run: python -m pip_audit --requirement requirements.txt --strict
       - name: Validate source syntax
         run: python -m compileall -q chat_bridge chat_bridge.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Prepare offline OCR models
+        run: python scripts/prepare_ocr_models.py
+      - name: Build release executable
+        run: python -m PyInstaller --noconfirm --clean "Translation Bridge.spec"
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "dist/Translation Bridge.exe"
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Packaged executable is missing" }
+          if ((Get-Item -LiteralPath $exe).Length -le 0) { throw "Packaged executable is empty" }
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged smoke test failed with exit code $($process.ExitCode)" }
+          Get-FileHash -LiteralPath $exe -Algorithm SHA256
+      - name: Build and smoke-test fast portable release
+        shell: pwsh
+        run: |
+          $env:TB_BUILD_ONEDIR = '1'
+          python -m PyInstaller --noconfirm "Translation Bridge.spec"
+          $exe = Join-Path $PWD "dist/Translation Bridge/Translation Bridge.exe"
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Portable executable is missing" }
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Portable smoke test failed with exit code $($process.ExitCode)" }

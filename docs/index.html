@@ -3,17 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Translation Bridge: أداة ترجمة خفيفة للمحادثات داخل الألعاب، مع اختصار عالمي وخيارات إرسال آمنة.">
+  <meta name="description" content="أداة ويندوز خفيفة لترجمة محادثات الألعاب، مع اختصار عالمي وتحكم واضح في النسخ واللصق والإرسال.">
   <meta name="theme-color" content="#101512">
+  <link rel="canonical" href="https://kenshln47.github.io/TRANSLATION-BRIDGE/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Translation Bridge — اكتب كما تتكلم">
+  <meta property="og:site_name" content="Translation Bridge">
+  <meta property="og:locale" content="ar_SA">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:title" content="Translation Bridge — اكتب بطريقتك وخلك في اللعب">
   <meta property="og:description" content="ترجمة عملية لمحادثات الألعاب بدون تشتيت.">
   <meta property="og:url" content="https://kenshln47.github.io/TRANSLATION-BRIDGE/">
-  <title>Translation Bridge — اكتب كما تتكلم</title>
+  <meta property="og:image" content="https://kenshln47.github.io/TRANSLATION-BRIDGE/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Translation Bridge — ترجمة محادثات الألعاب">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Translation Bridge — اكتب بطريقتك وخلك في اللعب">
+  <meta name="twitter:description" content="ترجمة عملية لمحادثات الألعاب بدون تشتيت.">
+  <meta name="twitter:image" content="https://kenshln47.github.io/TRANSLATION-BRIDGE/og-image.png">
+  <title>Translation Bridge — اكتب بطريقتك وخلك في اللعب</title>
   <link rel="icon" href="brand-mark.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,44 +30,32 @@
 
   <header class="site-header" data-header>
     <div class="container nav">
-      <nav class="nav-links" id="site-nav" data-menu aria-label="التنقل الرئيسي">
+      <nav class="nav-links" id="site-nav" data-menu aria-label="التنقل الرئيسي" data-i18n-aria-label="navLabel">
         <a href="#why" data-i18n="navWhy">الفكرة</a>
         <a href="#flow" data-i18n="navFlow">كيف تعمل</a>
         <a href="#privacy" data-i18n="navPrivacy">الخصوصية</a>
         <a class="nav-github" href="https://github.com/kenshln47/TRANSLATION-BRIDGE" target="_blank" rel="noopener noreferrer">GitHub</a>
         <div class="language-switcher">
           <button class="language-button" type="button" aria-expanded="false" aria-controls="language-menu" aria-haspopup="listbox" data-language-toggle>
-            <span class="language-button__flag" data-language-flag>🇸🇦</span>
-            <span class="language-button__copy"><small data-i18n="languageLabel">لغة الموقع</small><span data-language-current>العربية (خليجي)</span></span>
+            <span class="language-button__flag" data-language-flag>AR</span>
+            <span class="language-button__copy"><small data-i18n="languageLabel">لغة الموقع</small><span data-language-current>العربية</span></span>
             <span class="language-button__chevron" aria-hidden="true">⌄</span>
           </button>
           <div class="language-menu" id="language-menu" data-language-menu hidden>
-            <div class="language-menu__heading"><span data-i18n="languageTitle">اختر لغة الموقع</span><small data-i18n="languageHint">نفس اللغات المتاحة في التطبيق</small></div>
-            <div class="language-options" role="listbox" aria-label="لغات الموقع">
-              <button type="button" data-language="ar-gulf">🇸🇦 العربية (خليجي)</button>
-              <button type="button" data-language="ar-standard">🇸🇦 العربية (فصحى)</button>
-              <button type="button" data-language="en">🇬🇧 English</button>
-              <button type="button" data-language="tr">🇹🇷 Türkçe</button>
-              <button type="button" data-language="es">🇪🇸 Español</button>
-              <button type="button" data-language="fr">🇫🇷 Français</button>
-              <button type="button" data-language="pt">🇧🇷 Português</button>
-              <button type="button" data-language="ru">🇷🇺 Русский</button>
-              <button type="button" data-language="de">🇩🇪 Deutsch</button>
-              <button type="button" data-language="ko">🇰🇷 한국어</button>
-              <button type="button" data-language="ja">🇯🇵 日本語</button>
-              <button type="button" data-language="hi">🇮🇳 हिंदी</button>
-              <button type="button" data-language="zh">🇨🇳 中文</button>
-              <button type="button" data-language="auto">🌐 Auto-detect</button>
+            <div class="language-menu__heading"><span data-i18n="languageTitle">اختر لغة الموقع</span><small data-i18n="languageHint">واجهة الموقع متاحة بالعربية والإنجليزية</small></div>
+            <div class="language-options" role="listbox" aria-label="لغات الموقع" data-i18n-aria-label="languageOptionsLabel">
+              <button type="button" role="option" tabindex="-1" aria-selected="true" data-language="ar"><span class="language-option__code" aria-hidden="true">AR</span><span>العربية</span><span class="language-option__check" aria-hidden="true">✓</span></button>
+              <button type="button" role="option" tabindex="-1" aria-selected="false" data-language="en"><span class="language-option__code" aria-hidden="true">EN</span><span>English</span><span class="language-option__check" aria-hidden="true">✓</span></button>
             </div>
           </div>
         </div>
       </nav>
-      <a class="brand" href="#top" aria-label="Translation Bridge">
+      <a class="brand" href="#top" aria-label="Translation Bridge — الصفحة الرئيسية" data-i18n-aria-label="brandLabel">
         <img src="brand-mark.svg" width="36" height="36" alt="">
         <span>Translation Bridge</span>
       </a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
-        <span></span><span></span><span></span><span class="sr-only" data-i18n="menu">فتح القائمة</span>
+        <span></span><span></span><span></span><span class="sr-only" data-menu-label>فتح القائمة</span>
       </button>
     </div>
   </header>
@@ -74,14 +71,14 @@
             <a class="button button-primary" href="https://github.com/kenshln47/TRANSLATION-BRIDGE/releases" target="_blank" rel="noopener noreferrer"><span data-i18n="release">عرض الإصدارات</span> <span aria-hidden="true">←</span></a>
             <a class="text-link" href="#flow"><span data-i18n="seeFlow">شوف طريقة العمل</span> <span aria-hidden="true">↓</span></a>
           </div>
-          <ul class="hero-notes" aria-label="مزايا أساسية">
+          <ul class="hero-notes" aria-label="مزايا أساسية" data-i18n-aria-label="keyFeaturesLabel">
             <li data-i18n="noteWindows">ويندوز</li>
             <li data-i18n="noteHotkey">اختصار عالمي</li>
             <li data-i18n="noteCopy">وضع النسخ الآمن افتراضياً</li>
           </ul>
         </div>
 
-        <div class="product-frame reveal" aria-label="تصور لواجهة Translation Bridge">
+        <div class="product-frame reveal" aria-label="تصور لواجهة Translation Bridge" data-i18n-aria-label="productPreviewLabel">
           <div class="window-bar"><span></span><span></span><span></span><b>BRIDGE</b></div>
           <div class="window-body">
             <aside class="mini-rail">
@@ -103,7 +100,7 @@
       <div class="bridge-stroke" aria-hidden="true"><i></i><i></i><i></i></div>
     </section>
 
-    <section class="proof" aria-label="مبادئ المنتج">
+    <section class="proof" aria-label="مبادئ المنتج" data-i18n-aria-label="productPrinciplesLabel">
       <div class="container proof-grid reveal">
         <p><b>01</b> <span data-i18n="proofOne">مصمم للمحادثة السريعة، لا للصفحات الطويلة.</span></p>
         <p><b>02</b> <span data-i18n="proofTwo">أنت تختار متى تنسخ ومتى تلصق ومتى ترسل.</span></p>
@@ -119,7 +116,11 @@
       <div class="container feature-grid">
         <article class="feature reveal"><span>01</span><h3 data-i18n="featureOneTitle">اختصار في مكانه</h3><p data-i18n="featureOneText">افتح نافذة ترجمة صغيرة فوق اللعبة، اكتب، ثم اختفِ منها مباشرة بعد إنهاء المهمة.</p></article>
         <article class="feature reveal"><span>02</span><h3 data-i18n="featureTwoTitle">ترجمة تفهم النبرة</h3><p data-i18n="featureTwoText">تستخدم الأداة سياقاً قصيراً وإعدادات للعبة والنبرة بدل ترجمة كلمة بكلمة.</p></article>
-        <article class="feature reveal"><span>03</span><h3 data-i18n="featureThreeTitle">إرسال بحدود واضحة</h3><p data-i18n="featureThreeText">يُحفظ هدف الإرسال من لحظة بدء الطلب، ولا تُخمن الأداة نافذة أخرى إذا تغيّر التركيز.</p></article>
+        <article class="feature reveal"><span>03</span><h3 data-i18n="featureThreeTitle">إرسال بحدود واضحة</h3><p data-i18n="featureThreeText">تحفظ النافذة السريعة هدفها لحظة ضغط الاختصار، وتستخدم الواجهة آخر نافذة خارجية موثقة مع إعادة فحص التركيز قبل كل لصق أو إرسال.</p></article>
+      </div>
+      <div class="container app-languages reveal" aria-labelledby="app-languages-title">
+        <p class="eyebrow" id="app-languages-title" data-i18n="appLanguagesTitle">لغات الترجمة داخل التطبيق</p>
+        <p data-i18n="appLanguagesText">اكتشاف تلقائي، العربية، الإنجليزية، التركية، الإسبانية، الفرنسية، البرتغالية، الروسية، الألمانية، الكورية، اليابانية، الهندية والصينية.</p>
       </div>
     </section>
 
@@ -136,9 +137,10 @@
 
     <section class="section privacy" id="privacy">
       <div class="container privacy-card reveal">
-        <div><p class="eyebrow" data-i18n="privacyEyebrow">خصوصية مفهومة</p><h2 data-i18n="privacyTitle">ماذا يبقى عندك؟</h2><p data-i18n="privacyText">مفتاح API مشفر على جهازك. سجل الترجمة متوقف افتراضياً، وذاكرة الترجمة المتكررة مؤقتة ولا تُكتب على القرص.</p></div>
+        <div><p class="eyebrow" data-i18n="privacyEyebrow">خصوصية مفهومة</p><h2 data-i18n="privacyTitle">ما الذي يبقى محلياً، وما الذي يُرسل؟</h2><p data-i18n="privacyText">يتطلب التطبيق مفتاح OpenRouter خاصاً بك ويُحفظ مشفراً على جهازك. تُرسل رسالتك والسياق القصير إلى OpenRouter والنموذج المختار. قراءة شات اللعبة اختيارية: تبقى الصورة في الذاكرة ولا تُحفظ أو تُرسل، لكن نص الشات المرئي المستخرج محلياً — وقد يشمل أسماء ورسائل لاعبين آخرين — يُضاف إلى طلب الترجمة.</p></div>
         <ul>
-          <li><b data-i18n="privacyKey">المفتاح</b><span data-i18n="privacyKeyText">محلي ومشفر في ويندوز</span></li>
+          <li><b data-i18n="privacyKey">مفتاح OpenRouter</b><span data-i18n="privacyKeyText">مطلوب، ومحلي ومشفر في ويندوز</span></li>
+          <li><b data-i18n="privacyProvider">طلب الترجمة</b><span data-i18n="privacyProviderText">تُرسل الرسالة والسياق القصير ونص الشات المستخرج عند تفعيله</span></li>
           <li><b data-i18n="privacyHistory">السجل</b><span data-i18n="privacyHistoryText">اختياري ويمكن مسحه</span></li>
           <li><b data-i18n="privacyCache">التخزين المؤقت</b><span data-i18n="privacyCacheText">في الذاكرة لمدة قصيرة فقط</span></li>
         </ul>

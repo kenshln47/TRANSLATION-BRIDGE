@@ -114,13 +114,23 @@ class SetupScreen:
 
     def _on_result(self, ok: bool, msg: str, key: str):
         if ok:
-            from ..config import save_api_key
-            save_api_key(key)
+            from ..config import load_api_key, save_api_key
+            if not save_api_key(key):
+                # The test temporarily configures the in-memory translator.
+                # Restore persisted state if secure storage was unavailable.
+                self._app.translator.configure_api_key(load_api_key())
+                self.btn.configure(state="normal", text="CONNECT AND START")
+                self.status.configure(
+                    text="Could not securely save the key. Check folder permissions.",
+                    text_color=C.ERROR,
+                )
+                logger.error("Setup stopped because the API key could not be saved.")
+                return
             self.frame.destroy()
             self._app._build_main()
             self._app._api_ok(True, msg)
             logger.info("Setup complete — API key validated.")
         else:
-            self.btn.configure(state="normal", text="Connect & Start")
+            self.btn.configure(state="normal", text="CONNECT AND START")
             self.status.configure(text=f"Error: {msg}", text_color=C.ERROR)
             logger.warning(f"Setup failed: {msg}")
